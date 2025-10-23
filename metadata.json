@@ -1,0 +1,8 @@
+{
+  "name": "AI Career Copilot",
+  "description": "A personal AI-powered career assistant for students and early professionals to help discover skills, identify gaps, build personalized learning roadmaps, and get career guidance.",
+  "requestFramePermissions": [
+    "geolocation",
+    "microphone"
+  ]
+}
