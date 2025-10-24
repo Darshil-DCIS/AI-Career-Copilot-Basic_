@@ -3,6 +3,7 @@ import { getResumeFeedback } from '../services/geminiService';
 import type { ResumeFeedback as ResumeFeedbackType } from '../types';
 import Card from './common/Card';
 import { SparklesIcon, ResumeIcon } from './icons';
+import ResumePreview from './ResumePreview';
 
 const FeedbackSection: React.FC<{section: ResumeFeedbackType['feedbackSections'][0], scoreColor: (score: number) => string}> = ({ section, scoreColor }) => {
     const [isOpen, setIsOpen] = useState(true);
@@ -10,7 +11,7 @@ const FeedbackSection: React.FC<{section: ResumeFeedbackType['feedbackSections']
     return (
         <div className="bg-slate-800/70 border border-slate-700 rounded-lg overflow-hidden">
             <button onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-between items-center p-4 text-left">
-                <h3 className="text-lg font-semibold text-blue-300">{section.title}</h3>
+                <h3 className="text-lg font-semibold text-teal-300">{section.title}</h3>
                 <div className="flex items-center gap-4">
                     <p className={`font-bold text-xl ${scoreColor(section.score)}`}>{section.score}/10</p>
                     <svg className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
@@ -38,6 +39,7 @@ const ResumeFeedback: React.FC = () => {
     const [feedback, setFeedback] = useState<ResumeFeedbackType | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [viewMode, setViewMode] = useState<'editor' | 'preview'>('editor');
 
     const handleSubmit = async () => {
         if (!resumeText.trim() || !targetRole.trim()) {
@@ -72,34 +74,44 @@ const ResumeFeedback: React.FC = () => {
 
             <Card>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
+                     <div>
                         <label htmlFor="targetRole" className="block text-sm font-medium text-slate-300">Target Role</label>
                         <input
                             id="targetRole"
                             type="text"
                             value={targetRole}
                             onChange={(e) => setTargetRole(e.target.value)}
-                            className="w-full bg-slate-900/70 border border-slate-700 rounded-md p-2.5 mt-1 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            className="w-full bg-slate-900/70 border border-slate-700 rounded-md p-2.5 mt-1 focus:ring-2 focus:ring-teal-500 focus:outline-none"
                             placeholder="e.g., AI/ML Engineer"
                         />
                     </div>
                     <div className="md:col-span-2">
-                        <label htmlFor="resumeText" className="block text-sm font-medium text-slate-300">Paste your resume here</label>
-                        <textarea
-                            id="resumeText"
-                            rows={15}
-                            value={resumeText}
-                            onChange={(e) => setResumeText(e.target.value)}
-                            className="w-full bg-slate-900/70 border border-slate-700 rounded-md p-3 mt-1 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                            placeholder="Paste your resume content. For best results, use plain text."
-                        />
+                        <div className="flex justify-between items-center mb-1">
+                             <label htmlFor="resumeText" className="block text-sm font-medium text-slate-300">Paste your resume here</label>
+                             <div className="flex items-center gap-1 p-0.5 bg-slate-900/70 border border-slate-700 rounded-md">
+                                <button onClick={() => setViewMode('editor')} className={`px-3 py-1 text-xs rounded ${viewMode === 'editor' ? 'bg-slate-700' : ''}`}>Editor</button>
+                                <button onClick={() => setViewMode('preview')} className={`px-3 py-1 text-xs rounded ${viewMode === 'preview' ? 'bg-slate-700' : ''}`}>Preview</button>
+                             </div>
+                        </div>
+                        {viewMode === 'editor' ? (
+                            <textarea
+                                id="resumeText"
+                                rows={15}
+                                value={resumeText}
+                                onChange={(e) => setResumeText(e.target.value)}
+                                className="w-full bg-slate-900/70 border border-slate-700 rounded-md p-3 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                                placeholder="Paste your resume content. For best results, use plain text."
+                            />
+                        ) : (
+                            <ResumePreview resumeText={resumeText} />
+                        )}
                     </div>
                     <div className="md:col-span-2 text-center">
                          {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
                         <button
                             onClick={handleSubmit}
                             disabled={isLoading}
-                            className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-8 py-3 font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shadow-lg"
+                            className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-8 py-3 font-semibold text-white bg-gradient-to-r from-teal-500 to-cyan-600 rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shadow-lg"
                         >
                             <SparklesIcon />
                             {isLoading ? 'Analyzing...' : 'Get AI Feedback'}
@@ -110,7 +122,7 @@ const ResumeFeedback: React.FC = () => {
 
             {isLoading && (
                 <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-400 mx-auto"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-400 mx-auto"></div>
                     <p className="mt-4 text-slate-300">Our AI is scanning your resume... this might take a moment!</p>
                 </div>
             )}
@@ -131,7 +143,7 @@ const ResumeFeedback: React.FC = () => {
 
                     {feedback.suggestedBullets && feedback.suggestedBullets.length > 0 && (
                         <div className="mt-8">
-                            <h3 className="text-xl font-bold flex items-center gap-3 mb-4 text-purple-300">
+                            <h3 className="text-xl font-bold flex items-center gap-3 mb-4 text-teal-300">
                                 <SparklesIcon /> AI-Generated Bullet Points
                             </h3>
                             <div className="p-5 bg-slate-800/70 border border-slate-700 rounded-lg">

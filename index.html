@@ -8,10 +8,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
       body {
-        font-family: 'Poppins', sans-serif;
+        font-family: 'Inter', 'Poppins', sans-serif;
         background-color: #020617; /* slate-950 */
         overflow: hidden;
       }
@@ -23,11 +23,11 @@
         background: transparent;
       }
       ::-webkit-scrollbar-thumb {
-        background: #475569;
+        background: #334155;
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #64748b;
+        background: #475569;
       }
       /* Animated Aurora Background */
       body::before {
@@ -38,21 +38,44 @@
         width: 100vw;
         height: 100vh;
         background: 
-          radial-gradient(ellipse 50% 50% at 20% 20%, rgba(96, 165, 250, 0.2), transparent),
-          radial-gradient(ellipse 50% 50% at 80% 80%, rgba(192, 132, 252, 0.2), transparent);
+          radial-gradient(ellipse 50% 50% at 30% 25%, rgba(20, 184, 166, 0.15), transparent),
+          radial-gradient(ellipse 50% 50% at 70% 75%, rgba(14, 165, 233, 0.15), transparent),
+          radial-gradient(circle 400px at 50% 50%, rgba(107, 114, 128, 0.1), transparent);
         z-index: -1;
-        animation: pulse-aurora 15s infinite alternate;
+        animation: pulse-aurora 30s cubic-bezier(0.4, 0, 0.6, 1) infinite;
       }
+
       @keyframes pulse-aurora {
         0% {
-          transform: scale(1);
-          opacity: 0.8;
+          transform: scale(1) rotate(0deg) translate(0, 0);
+          opacity: 0.7;
+        }
+        50% {
+           transform: scale(1.5) rotate(10deg) translate(20px, -20px);
+           opacity: 1;
         }
         100% {
-          transform: scale(1.2);
-          opacity: 1;
+          transform: scale(1) rotate(0deg) translate(0, 0);
+          opacity: 0.7;
         }
       }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .fade-in {
+          animation: fadeIn 0.5s ease-out forwards;
+      }
+
+      @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+      }
+      .modal-content-animate {
+          animation: scaleIn 0.3s cubic-bezier(0.2, 0, 0.2, 1) forwards;
+      }
+
     </style>
   <script type="importmap">
 {
@@ -60,7 +83,8 @@
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.26.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm"
   }
 }
 </script>
