@@ -212,19 +212,8 @@ export const getFutureSkillTrends = async (targetRole: string): Promise<FutureTr
     const prompt = `
         Analyze the future of the "${targetRole}" profession. Identify 4-5 key emerging trends, covering new skills, important tools, and shifting methodologies. 
         For each trend, provide a concise name (as 'skill') and a detailed explanation (as 'reason') of why it's becoming crucial, citing specific examples or developments.
-        Use Google Search to gather the most current information from industry reports, tech news, and expert analyses. Format the output as a JSON array.
+        Use Google Search to gather the most current information. IMPORTANT: Your response MUST be only a valid JSON array of objects, without any markdown formatting or other text.
     `;
-     const responseSchema = {
-        type: Type.ARRAY,
-        items: {
-            type: Type.OBJECT,
-            properties: {
-                skill: { type: Type.STRING, description: "The name of the trend/skill/tool." },
-                reason: { type: Type.STRING, description: "A detailed explanation of its importance and relevance for the future." }
-            },
-            required: ['skill', 'reason']
-        }
-    };
     
     try {
         const response = await ai.models.generateContent({
@@ -232,12 +221,11 @@ export const getFutureSkillTrends = async (targetRole: string): Promise<FutureTr
             contents: prompt,
             config: {
                 tools: [{googleSearch: {}}],
-                responseMimeType: 'application/json',
-                responseSchema,
             }
         });
 
-        return JSON.parse(response.text) as FutureTrend[];
+        const text = response.text.trim().replace(/^```json\n?/, '').replace(/```$/, '');
+        return JSON.parse(text) as FutureTrend[];
 
     } catch (error) {
         console.error("Error generating future trends:", error);
@@ -355,21 +343,7 @@ export const findNearbyCourses = async (query: string, location: { latitude: num
 };
 
 export const findOnlineCourses = async (query: string): Promise<Course[]> => {
-    const prompt = `Search the web to find 5 popular and highly-rated online courses for the topic "${query}". For each course, provide its title, a one-sentence description, the direct URL to the course page, and a rating out of 5. Format the response as a JSON array.`;
-
-    const responseSchema = {
-        type: Type.ARRAY,
-        items: {
-            type: Type.OBJECT,
-            properties: {
-                title: { type: Type.STRING },
-                description: { type: Type.STRING },
-                url: { type: Type.STRING },
-                rating: { type: Type.NUMBER, description: "A rating out of 5, e.g., 4.7" }
-            },
-            required: ['title', 'description', 'url', 'rating']
-        }
-    };
+    const prompt = `Search the web to find 5 popular and highly-rated online courses for the topic "${query}". For each course, provide its title, a one-sentence description, the direct URL to the course page, and a rating out of 5. IMPORTANT: Your response MUST be only a valid JSON array of objects, without any markdown formatting or other text.`;
     
     try {
         const response = await ai.models.generateContent({
@@ -377,12 +351,11 @@ export const findOnlineCourses = async (query: string): Promise<Course[]> => {
             contents: prompt,
             config: {
                 tools: [{googleSearch: {}}],
-                responseMimeType: 'application/json',
-                responseSchema
             }
         });
 
-        const parsed = JSON.parse(response.text);
+        const text = response.text.trim().replace(/^```json\n?/, '').replace(/```$/, '');
+        const parsed = JSON.parse(text);
         return parsed.map((course: any) => ({...course, type: 'Online'})) as Course[];
 
     } catch (error) {
@@ -456,33 +429,19 @@ export const findJobs = async (targetRole: string, location: string): Promise<Jo
         Find 5 recent job postings for a "${targetRole}" ${location ? `in or near "${location}"` : ''}.
         Use Google Search to find relevant listings on popular job boards (like LinkedIn, Indeed, Glassdoor, etc.).
         For each job, extract the following information: job title, company name, location, a direct URL to the posting, and a brief 1-2 sentence description of the role.
-        Return the data as a clean JSON array.
+        IMPORTANT: Your response MUST be only a valid JSON array of objects, without any markdown formatting or other text.
     `;
-    const responseSchema = {
-        type: Type.ARRAY,
-        items: {
-            type: Type.OBJECT,
-            properties: {
-                title: { type: Type.STRING },
-                company: { type: Type.STRING },
-                location: { type: Type.STRING },
-                url: { type: Type.STRING },
-                description: { type: Type.STRING }
-            },
-            required: ['title', 'company', 'location', 'url', 'description']
-        }
-    };
+    
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
                 tools: [{ googleSearch: {} }],
-                responseMimeType: 'application/json',
-                responseSchema
             }
         });
-        return JSON.parse(response.text) as JobPosting[];
+        const text = response.text.trim().replace(/^```json\n?/, '').replace(/```$/, '');
+        return JSON.parse(text) as JobPosting[];
     } catch (error) {
         console.error("Error finding jobs:", error);
         return [];

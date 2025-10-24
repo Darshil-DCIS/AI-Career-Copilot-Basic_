@@ -129,15 +129,27 @@ const App: React.FC = () => {
     }, [session]);
     
     const updateUserInDatabase = async (profileData: UserProfile) => {
-         const { error } = await supabase
+        // The id is optional in the type, but required for an update.
+        if (!profileData.id) {
+            const errMsg = "Cannot update profile without a user ID.";
+            console.error(errMsg);
+            setAppError(`Failed to save changes: ${errMsg}`);
+            throw new Error(errMsg);
+        }
+
+        // FIX: Destructure the id from the rest of the data.
+        // Supabase expects the primary key in the filter (.eq), not the update payload.
+        // Including it in the payload can cause a "Failed to fetch" error.
+        const { id, ...updateData } = profileData;
+
+        const { error } = await supabase
             .from('profiles')
-            .update(profileData)
-            .eq('id', profileData.id);
+            .update(updateData)
+            .eq('id', id);
         
         if (error) {
             console.error("Failed to update profile:", JSON.stringify(error, null, 2));
             setAppError(`Failed to save your changes. Your data might be out of sync. Please refresh. Details: ${error.message}`);
-            // Revert optimistic update on error is handled by not setting the user state until success
             throw error;
         }
     }
