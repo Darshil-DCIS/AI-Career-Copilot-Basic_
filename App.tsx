@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import type { UserProfile, InterviewSession, VoiceSession, UserProject, Achievement, SkillGap, JobPosting, TrackedJob, TrackedJobStatus } from './types';
+import type { UserProfile, InterviewSession, VoiceSession, UserProject, Achievement, SkillGap, JobPosting, TrackedJob, TrackedJobStatus, QuizSession } from './types';
 import Dashboard from './components/Dashboard';
 import SmartChat from './components/AiMentorChat';
 import ResumeFeedback from './components/ResumeFeedback';
@@ -12,13 +12,15 @@ import MyJourney from './components/MyJourney';
 import ProfileEditor from './components/ProfileEditor';
 import JobFinder from './components/JobFinder';
 import TrendWatcher from './components/TrendWatcher';
-import { DashboardIcon, ChatIcon, ResumeIcon, SparklesIcon, InterviewIcon, MicrophoneIcon, MapPinIcon, LogoutIcon, ProjectIcon, UserIcon, BriefcaseIcon, TrendingUpIcon } from './components/icons';
+import AiToolbox from './components/AiToolbox';
+import { DashboardIcon, ChatIcon, ResumeIcon, SparklesIcon, InterviewIcon, MicrophoneIcon, MapPinIcon, LogoutIcon, ProjectIcon, UserIcon, BriefcaseIcon, TrendingUpIcon, ToolboxIcon } from './components/icons';
 import { generateSkillMap, generateRoadmap, generateProjectSuggestions, getIndustryTrends } from './services/geminiService';
 import { supabase } from './supabaseClient';
 import { Session } from '@supabase/supabase-js';
+import { checkAndAwardAchievements } from './utils/achievementUtils';
 
 
-type View = 'dashboard' | 'journey' | 'chat' | 'resume' | 'interview' | 'voice' | 'courses' | 'jobs' | 'trends' | 'profile';
+type View = 'dashboard' | 'journey' | 'chat' | 'resume' | 'interview' | 'voice' | 'courses' | 'jobs' | 'trends' | 'profile' | 'toolbox';
 
 const App: React.FC = () => {
     const [user, setUser] = useState<UserProfile | null>(null);
@@ -113,6 +115,7 @@ const App: React.FC = () => {
                 linkedinUrl: linkedinUrl || undefined,
                 interviewHistory: [],
                 voiceMentorHistory: [],
+                quizHistory: [],
             };
 
             const { error } = await supabase.from('profiles').upsert(profileData, {
@@ -162,8 +165,11 @@ const App: React.FC = () => {
         const oldTargetRole = user.targetRole;
         const newTargetRole = profileUpdate.targetRole;
 
-        // Optimistically update for snappy UI feel
-        const optimisticUser = { ...user, ...profileUpdate };
+        // Optimistically update for snappy UI feel, including achievements
+        let optimisticUser = { ...user, ...profileUpdate };
+        const newAchievements = checkAndAwardAchievements(optimisticUser);
+        optimisticUser = { ...optimisticUser, achievements: newAchievements };
+
         setUser(optimisticUser);
         setAppError(null);
 
@@ -179,13 +185,17 @@ const App: React.FC = () => {
                     generateProjectSuggestions(optimisticUser.skills),
                     getIndustryTrends(newTargetRole)
                 ]);
-                const regeneratedUser = { 
+                let regeneratedUser = { 
                     ...optimisticUser, 
                     roadmap: newRoadmap, 
                     // FIX: Use 'as const' to prevent TypeScript from widening the 'Not Started' literal to a generic 'string' type.
                     projects: (newProjects || []).map(p => ({ ...p, status: 'Not Started' as const })),
                     trends: newTrends
                 };
+                // Re-check achievements after regeneration
+                const finalAchievements = checkAndAwardAchievements(regeneratedUser);
+                regeneratedUser = { ...regeneratedUser, achievements: finalAchievements };
+
                 await updateUserInDatabase(regeneratedUser);
                 setUser(regeneratedUser); // Set final state
             } else {
@@ -207,17 +217,11 @@ const App: React.FC = () => {
         const wasCompleted = item.completed;
         item.completed = !item.completed;
         
-        let newAchievements = [...(currentUser.achievements || [])];
-        const allCompleted = newRoadmap.every(i => i.completed);
-        if (allCompleted && !newAchievements.some(a => a.name === 'Roadmap Complete')) {
-            newAchievements.push({ name: 'Roadmap Complete', icon: '🗺️', description: 'Completed all steps in your learning roadmap.' });
-        }
-
         const xpChange = wasCompleted ? -150 : 150;
         const newXp = Math.max(0, currentUser.xp + xpChange);
         const newLevel = Math.floor(newXp / 500) + 1;
         
-        handleUpdateProfile({ roadmap: newRoadmap, xp: newXp, level: newLevel, achievements: newAchievements });
+        handleUpdateProfile({ roadmap: newRoadmap, xp: newXp, level: newLevel });
     };
 
     const handleUpdateProject = (updatedProject: UserProject) => {
@@ -225,27 +229,17 @@ const App: React.FC = () => {
         const currentUser = user;
         const newProjects = (currentUser.projects || []).map(p => p.title === updatedProject.title ? updatedProject : p);
         let xpChange = 0;
-        let newAchievements = [...(currentUser.achievements || [])];
         
         const oldProject = (currentUser.projects || []).find(p => p.title === updatedProject.title);
         if(oldProject?.status !== 'Completed' && updatedProject.status === 'Completed') {
              xpChange = updatedProject.xp;
-             const achievementMap: Record<UserProject['difficulty'], Achievement> = {
-                'Easy': { name: 'First Easy Project', icon: '🥉', description: 'Completed your first Easy project.' },
-                'Medium': { name: 'First Medium Project', icon: '🏅', description: 'Completed your first Medium project.' },
-                'Hard': { name: 'First Hard Project', icon: '🏆', description: 'Completed your first Hard project.' },
-             };
-             const achievement = achievementMap[updatedProject.difficulty];
-             if (achievement && !newAchievements.some(a => a.name === achievement.name)) {
-                newAchievements.push(achievement);
-             }
         } else if (oldProject?.status === 'Completed' && updatedProject.status !== 'Completed') {
             xpChange = -updatedProject.xp;
         }
 
         const newXp = Math.max(0, currentUser.xp + xpChange);
         const newLevel = Math.floor(newXp / 500) + 1;
-        handleUpdateProfile({ projects: newProjects, xp: newXp, level: newLevel, achievements: newAchievements });
+        handleUpdateProfile({ projects: newProjects, xp: newXp, level: newLevel });
     };
 
     const handleRegenerateRoadmap = async (prompt: string) => {
@@ -268,6 +262,11 @@ const App: React.FC = () => {
     const handleSaveInterview = (sessionData: InterviewSession) => {
         if(!user) return;
         handleUpdateProfile({ interviewHistory: [sessionData, ...(user.interviewHistory || [])] });
+    };
+    
+    const handleSaveQuiz = (sessionData: QuizSession) => {
+        if(!user) return;
+        handleUpdateProfile({ quizHistory: [sessionData, ...(user.quizHistory || [])] });
     };
 
     const handleSaveVoiceSession = (sessionData: VoiceSession) => {
@@ -332,12 +331,13 @@ const App: React.FC = () => {
         journey: <MyJourney user={user} onRoadmapToggle={handleRoadmapToggle} onUpdateProject={handleUpdateProject} onRegenerateRoadmap={handleRegenerateRoadmap} onRegenerateProjects={handleRegenerateProjects} onTrackJob={handleTrackJob} />,
         chat: <SmartChat user={user} />,
         resume: <ResumeFeedback user={user} />,
-        interview: <InterviewCoach user={user} onSaveInterview={handleSaveInterview} />,
+        interview: <InterviewCoach user={user} onSaveInterview={handleSaveInterview} onSaveQuiz={handleSaveQuiz} />,
         voice: <VoiceMentor user={user} onSaveSession={handleSaveVoiceSession} />,
         courses: <CourseFinder />,
         jobs: <JobFinder user={user} onTrackJob={handleTrackJob} onUpdateTrackedJobStatus={handleUpdateTrackedJobStatus} />,
         trends: <TrendWatcher user={user} onUpdateTrends={async () => handleUpdateProfile({ trends: await getIndustryTrends(user.targetRole) })} />,
-        profile: <ProfileEditor user={user} onUpdateProfile={handleUpdateProfile} />
+        profile: <ProfileEditor user={user} onUpdateProfile={handleUpdateProfile} />,
+        toolbox: <AiToolbox user={user} />
     }
 
     return (
@@ -351,9 +351,10 @@ const App: React.FC = () => {
                     <NavItem icon={<DashboardIcon />} label="Dashboard" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
                     <NavItem icon={<ProjectIcon />} label="My Journey" active={view === 'journey'} onClick={() => setView('journey')} />
                     <NavItem icon={<ChatIcon />} label="Smart Chat" active={view === 'chat'} onClick={() => setView('chat')} />
-                    <NavItem icon={<MicrophoneIcon />} label="Voice Mentor" active={view === 'voice'} onClick={() => setView('voice')} />
+                    <NavItem icon={<ToolboxIcon />} label="AI Toolbox" active={view === 'toolbox'} onClick={() => setView('toolbox')} />
                     <NavItem icon={<ResumeIcon />} label="Resume" active={view === 'resume'} onClick={() => setView('resume')} />
                     <NavItem icon={<InterviewIcon />} label="Interview" active={view === 'interview'} onClick={() => setView('interview')} />
+                    <NavItem icon={<MicrophoneIcon />} label="Voice Mentor" active={view === 'voice'} onClick={() => setView('voice')} />
                     <NavItem icon={<MapPinIcon />} label="Courses" active={view === 'courses'} onClick={() => setView('courses')} />
                     <NavItem icon={<BriefcaseIcon />} label="Job Finder" active={view === 'jobs'} onClick={() => setView('jobs')} />
                     <NavItem icon={<TrendingUpIcon />} label="Trend Watcher" active={view === 'trends'} onClick={() => setView('trends')} />
@@ -374,7 +375,7 @@ const App: React.FC = () => {
                 <NavItemMobile icon={<DashboardIcon />} active={view === 'dashboard'} onClick={() => setView('dashboard')} />
                 <NavItemMobile icon={<ProjectIcon />} active={view === 'journey'} onClick={() => setView('journey')} />
                 <NavItemMobile icon={<ChatIcon />} active={view === 'chat'} onClick={() => setView('chat')} />
-                <NavItemMobile icon={<BriefcaseIcon />} active={view === 'jobs'} onClick={() => setView('jobs')} />
+                <NavItemMobile icon={<ToolboxIcon />} active={view === 'toolbox'} onClick={() => setView('toolbox')} />
                 <NavItemMobile icon={<UserIcon />} active={view === 'profile'} onClick={() => setView('profile')} />
             </nav>
         </div>

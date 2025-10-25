@@ -9,6 +9,7 @@ import { HistoryIcon } from './icons';
 
 const API_KEY = process.env.API_KEY;
 if (!API_KEY) throw new Error("API_KEY environment variable not set");
+// FIX: Correctly instantiate GoogleGenAI with a named apiKey parameter as per the guidelines.
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 type Status = 'IDLE' | 'CONNECTING' | 'LISTENING' | 'SPEAKING' | 'ERROR';

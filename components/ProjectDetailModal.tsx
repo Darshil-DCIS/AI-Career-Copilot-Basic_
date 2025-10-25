@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { UserProject, ProjectStep } from '../types';
 import Card from './common/Card';
 import { generateProjectPlan } from '../services/geminiService';
@@ -12,11 +12,16 @@ interface ProjectDetailModalProps {
 
 const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ project, onClose, onUpdateProject }) => {
     const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+    const [notes, setNotes] = useState(project.notes || '');
+
+    useEffect(() => {
+        setNotes(project.notes || '');
+    }, [project.notes]);
 
     const handleGeneratePlan = async () => {
         setIsGeneratingPlan(true);
         const plan = await generateProjectPlan(project.title, project.description);
-        onUpdateProject({ ...project, projectPlan: plan });
+        onUpdateProject({ ...project, projectPlan: plan, notes });
         setIsGeneratingPlan(false);
     };
     
@@ -24,11 +29,11 @@ const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ project, onClos
         if (!project.projectPlan) return;
         const newPlan = [...project.projectPlan];
         newPlan[index].completed = !newPlan[index].completed;
-        onUpdateProject({ ...project, projectPlan: newPlan });
+        onUpdateProject({ ...project, projectPlan: newPlan, notes });
     };
 
     const handleStatusChange = (status: UserProject['status']) => {
-        onUpdateProject({ ...project, status });
+        onUpdateProject({ ...project, status, notes });
     };
 
   return (
@@ -101,6 +106,23 @@ const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ project, onClos
                     ))}
                 </div>
             )}
+        </div>
+
+        <div className="mt-6">
+            <h3 className="font-bold text-lg text-slate-200 mb-2">Project Notes</h3>
+            <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={5}
+                className="w-full bg-slate-900/70 border border-slate-700 rounded-md p-3 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                placeholder="Add notes, ideas, or reflections here..."
+            />
+            <button 
+                onClick={() => onUpdateProject({ ...project, notes })}
+                className="mt-2 px-4 py-2 text-sm font-semibold bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+            >
+                Save Notes
+            </button>
         </div>
 
       </Card>

@@ -1,332 +1,454 @@
 import React, { useState, useMemo } from 'react';
-// FIX: Removed the non-existent 'FutureTrend' type from the import.
-import type { UserProfile, RoadmapStep, UserProject, SkillGap, Achievement } from '../types';
+import type { UserProfile, SkillGap, RoadmapStep, UserProject, Achievement, TrackedJobStatus, TrackedJob } from '../types';
 import Card from './common/Card';
-import { SparklesIcon, GithubIcon, LinkedInIcon, ProjectIcon } from './icons';
+import ProgressBar from './common/ProgressBar';
+import { SparklesIcon, ProjectIcon, StarIcon, TrendingUpIcon, BrainIcon, DownloadIcon } from './icons';
 import SkillDetailModal from './SkillDetailModal';
 
 
-const groupBy = <T, K extends string | number>(list: T[], getKey: (item: T) => K) =>
-  (list || []).reduce((acc, currentItem) => {
-    const group = getKey(currentItem);
-    (acc[group] = acc[group] || []).push(currentItem);
-    return acc;
-  }, {} as Record<K, T[]>);
+// Helper functions for HTML generation
+const h1 = (text: string) => `<h1>${text}</h1>`;
+const h2 = (text: string) => `<h2>${text}</h2>`;
+const h3 = (text: string) => `<h3>${text}</h3>`;
+const p = (text: string) => `<p>${text}</p>`;
+const bold = (text: string) => `<strong>${text}</strong>`;
+const li = (text: string) => `<li>${text}</li>`;
+const ul = (items: string[]) => `<ul>${items.map(li).join('')}</ul>`;
 
-const proficiencyConfig = {
-    'Beginner': { color: 'bg-sky-500/30', textColor: 'text-sky-300', level: 1, chartColor: '#0ea5e9' },
-    'Intermediate': { color: 'bg-emerald-500/30', textColor: 'text-emerald-300', level: 2, chartColor: '#10b981' },
-    'Advanced': { color: 'bg-amber-500/30', textColor: 'text-amber-300', level: 3, chartColor: '#f59e0b' },
-    'Expert': { color: 'bg-purple-500/30', textColor: 'text-purple-300', level: 4, chartColor: '#a855f7' },
-} as const;
+const getStyles = () => `
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; }
+    h1 { color: #0d9488; border-bottom: 2px solid #0d9488; padding-bottom: 10px; }
+    h2 { color: #0e7490; border-bottom: 1px solid #ccfbf1; padding-bottom: 5px; margin-top: 20px; }
+    h3 { color: #155e75; margin-top: 15px; }
+    p { margin-bottom: 10px; }
+    ul { list-style-type: disc; margin-left: 20px; }
+    li { margin-bottom: 5px; }
+    strong { color: #0f766e; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; }
+    .header { text-align: center; margin-bottom: 30px; }
+    .summary-card { background-color: #f9f9f9; border: 1px solid #eee; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+    .session-summary { padding-left: 20px; border-left: 2px solid #eee; margin-top: 5px; margin-bottom: 15px; }
+  </style>
+`;
 
+// Main report generation function
+const generateJourneyReportHTML = (user: UserProfile): string => {
+    let content = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>My AI Career Copilot Journey</title>
+            ${getStyles()}
+        </head>
+        <body>
+            <div class="header">
+                ${h1('AI Career Copilot Journey Report')}
+                ${p(`${bold('Name:')} ${user.name}`)}
+                ${p(`${bold('Target Role:')} ${user.targetRole}`)}
+                ${p(`<em>Report generated on: ${new Date().toLocaleDateString()}</em>`)}
+            </div>
+    `;
 
-const SkillHeatmap: React.FC<{skills: SkillGap[], onSkillClick: (skill: SkillGap) => void}> = ({ skills, onSkillClick }) => {
-    if (!skills || skills.length === 0) return null;
-    const groupedSkills = groupBy(skills, (skill: SkillGap) => skill.category);
+    // --- Profile Summary ---
+    content += h2('Profile Summary');
+    content += '<div class="summary-card">';
+    content += ul([
+        `${bold('Level:')} ${user.level}`,
+        `${bold('XP:')} ${user.xp}`,
+        `${bold('Current Streak:')} ${user.streak} days`,
+    ]);
+    content += '</div>';
+
+    // --- Achievements ---
+    if (user.achievements?.length > 0) {
+        content += h2('Achievements');
+        content += ul(user.achievements.map(ach => `${ach.icon} ${bold(ach.name)}: ${ach.description}`));
+    }
+
+    // --- Skills & Gaps ---
+    if (user.skills?.length > 0) {
+        content += h2('Skills Analysis');
+        const existingSkills = user.skills.filter(s => !s.isGap);
+        const skillGaps = user.skills.filter(s => s.isGap);
+
+        if (existingSkills.length > 0) {
+            content += h3('My Skills');
+            content += `<table><thead><tr><th>Skill</th><th>Proficiency</th><th>Category</th></tr></thead><tbody>`;
+            existingSkills.forEach(skill => {
+                content += `<tr><td>${skill.name}</td><td>${skill.proficiency}</td><td>${Array.isArray(skill.category) ? skill.category.join(', ') : skill.category}</td></tr>`;
+            });
+            content += `</tbody></table>`;
+        }
+
+        if (skillGaps.length > 0) {
+            content += h3('Identified Skill Gaps');
+            content += `<table><thead><tr><th>Skill to Acquire</th><th>Proficiency</th><th>Category</th></tr></thead><tbody>`;
+            skillGaps.forEach(skill => {
+                content += `<tr><td>${skill.name}</td><td>${skill.proficiency}</td><td>${Array.isArray(skill.category) ? skill.category.join(', ') : skill.category}</td></tr>`;
+            });
+            content += `</tbody></table>`;
+        }
+    }
+
+    // --- Roadmap ---
+    if (user.roadmap?.length > 0) {
+        content += h2('Personalized Roadmap');
+        user.roadmap.forEach(step => {
+            content += h3(`${step.completed ? '[COMPLETED] ' : ''}${step.title} (${step.duration})`);
+            content += p(`${bold('Milestone Project:')} ${step.milestoneProject}`);
+            content += p(`${bold('Skills to Learn:')} ${step.skillsToLearn.join(', ')}`);
+            content += p(`${bold('Suggested Resources:')}`);
+            content += ul(step.suggestedResources.map(res => `<a href="${res.url}">${res.name}</a> (${res.type})`));
+        });
+    }
+
+    // --- Projects ---
+    if (user.projects?.length > 0) {
+        content += h2('Project Portfolio');
+        user.projects.forEach(project => {
+            content += h3(`${project.title} - [${project.status}]`);
+            content += p(`${bold('Description:')} ${project.description}`);
+            content += p(`${bold('Difficulty:')} ${project.difficulty} (${project.xp} XP)`);
+            content += p(`${bold('Required Skills:')} ${project.requiredSkills.join(', ')}`);
+        });
+    }
+
+    // --- Trend Watcher ---
+    if (user.trends?.length > 0) {
+        content += h2('Industry Trend Summary');
+        const currentTrends = user.trends.filter(t => t.type === 'Current');
+        const futureTrends = user.trends.filter(t => t.type === 'Future');
+        if (currentTrends.length > 0) {
+            content += h3('Current Trends');
+            currentTrends.forEach(trend => { content += p(`${bold(trend.title)}: ${trend.summary}`); });
+        }
+        if (futureTrends.length > 0) {
+            content += h3('Future Trends');
+            futureTrends.forEach(trend => { content += p(`${bold(trend.title)}: ${trend.summary}`); });
+        }
+    }
+
+    // --- Job Finder Summary ---
+    if (user.trackedJobs?.length > 0) {
+        content += h2('Job Finder Kanban Summary');
+        const jobsByStatus: { [key in TrackedJobStatus]?: TrackedJob[] } = {};
+        user.trackedJobs.forEach(job => {
+            if (!jobsByStatus[job.status]) { jobsByStatus[job.status] = []; }
+            jobsByStatus[job.status]?.push(job);
+        });
+        for (const status in jobsByStatus) {
+            const jobs = jobsByStatus[status as TrackedJobStatus];
+            if (jobs?.length > 0) {
+                content += h3(`${status} (${jobs.length})`);
+                content += ul(jobs.map(job => `${job.title} at ${job.company}`));
+            }
+        }
+    }
     
+    // --- AI Tool Interactions ---
+    content += h2('AI Mentor & Coach Summaries');
+    content += p("This section summarizes insights from your interactions with the AI tools.");
+
+    if (user.interviewHistory?.length > 0) {
+        content += h3('Interview Coach Summaries');
+        user.interviewHistory.forEach((session, i) => {
+             content += p(`${bold(`Session #${i + 1} on ${new Date(session.date).toLocaleDateString()} for ${session.targetRole}:`)}`);
+             content += `<div class="session-summary">${session.feedbackSummary.replace(/\n/g, '<br>')}</div>`;
+        });
+    }
+
+    if (user.voiceMentorHistory?.length > 0) {
+        content += h3('Voice Mentor Summaries');
+        user.voiceMentorHistory.forEach((session, i) => {
+             content += p(`${bold(`Session #${i + 1} on ${new Date(session.date).toLocaleDateString()}:`)}`);
+             content += `<div class="session-summary">${session.keyTakeaways.replace(/\n/g, '<br>')}</div>`;
+        });
+    }
+
+    if (user.quizHistory?.length > 0) {
+        content += h3('Quiz History');
+        user.quizHistory.forEach((session, i) => {
+             content += p(`${bold(`Quiz #${i + 1} on ${new Date(session.date).toLocaleDateString()} for ${session.targetRole}:`)}`);
+             content += ul([`Score: ${session.score}%`, `Topics: ${session.topics.join(', ')}`]);
+        });
+    }
+    
+    content += h3('Smart Chat');
+    content += p('Suggestions from your general Smart Chat sessions are integrated into your journey and are not logged separately in this report.');
+
+    content += `</body></html>`;
+    return content;
+};
+
+// A reusable SVG Donut Chart component created from scratch
+const DonutChart: React.FC<{ 
+    data: { name: string, value: number, color: string }[], 
+    title: string 
+}> = ({ data, title }) => {
+    const total = useMemo(() => data.reduce((sum, item) => sum + item.value, 0), [data]);
+    if (total === 0) {
+        return (
+             <div className="flex flex-col items-center justify-center h-full">
+                <h3 className="text-xl font-bold text-slate-100 mb-2">{title}</h3>
+                <p className="text-slate-400">No data available yet.</p>
+            </div>
+        )
+    }
+    const radius = 80;
+    const circumference = 2 * Math.PI * radius;
+    let accumulatedAngle = -90; // Start from the top
+
+    const segments = data.map(item => {
+        const percentage = item.value / total;
+        const angle = percentage * 360;
+        const largeArcFlag = angle > 180 ? 1 : 0;
+        
+        const startX = 100 + radius * Math.cos(Math.PI * accumulatedAngle / 180);
+        const startY = 100 + radius * Math.sin(Math.PI * accumulatedAngle / 180);
+        
+        accumulatedAngle += angle;
+        
+        const endX = 100 + radius * Math.cos(Math.PI * accumulatedAngle / 180);
+        const endY = 100 + radius * Math.sin(Math.PI * accumulatedAngle / 180);
+
+        return {
+            path: `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`,
+            stroke: item.color,
+            strokeDasharray: `${circumference}`,
+            strokeDashoffset: `${circumference * (1 - percentage)}`,
+        };
+    });
+
     return (
-        <Card>
-            <h2 className="text-xl font-bold text-slate-100">Your Skill Heatmap</h2>
-            <p className="text-sm text-slate-400 mt-1 mb-6">A visual overview of your skills. Click a skill to see related items.</p>
-            <div className="space-y-6">
-                {Object.entries(groupedSkills).map(([category, skillsInCategory]) => (
-                    <div key={category}>
-                        <h3 className="font-semibold text-slate-200 mb-3">{category}</h3>
-                        <div className="flex flex-wrap gap-2">
-                            {skillsInCategory.sort((a, b) => proficiencyConfig[b.proficiency].level - proficiencyConfig[a.proficiency].level).map((skill) => (
-                                <button 
-                                    key={skill.name} 
-                                    onClick={() => onSkillClick(skill)}
-                                    className={`px-3 py-1.5 text-sm font-medium rounded-full ${proficiencyConfig[skill.proficiency].color} ${proficiencyConfig[skill.proficiency].textColor} relative border border-transparent ${skill.isGap ? 'ring-2 ring-amber-400/80' : ''} transition-transform hover:scale-105`}
-                                >
-                                    {skill.name}
-                                </button>
-                            ))}
+        <div className="flex flex-col items-center">
+            <h3 className="text-xl font-bold text-slate-100 mb-4">{title}</h3>
+            <div className="relative w-48 h-48">
+                <svg viewBox="0 0 200 200" className="-rotate-90">
+                    {data.map((item, index) => {
+                         const percentage = item.value / total;
+                         const strokeDashoffset = circumference * (1 - percentage);
+                         let accumulatedPercentage = 0;
+                         for(let i=0; i < index; i++) {
+                            accumulatedPercentage += data[i].value / total;
+                         }
+                         const rotation = accumulatedPercentage * 360;
+                        return (
+                             <circle
+                                key={item.name}
+                                cx="100" cy="100" r={radius}
+                                fill="transparent"
+                                stroke={item.color}
+                                strokeWidth="20"
+                                strokeDasharray={circumference}
+                                strokeDashoffset={strokeDashoffset}
+                                transform={`rotate(${rotation}, 100, 100)`}
+                            />
+                        )
+                    })}
+                </svg>
+                 <div className="absolute inset-0 flex items-center justify-center flex-col">
+                    <span className="text-3xl font-bold">{total}</span>
+                    <span className="text-sm text-slate-400">Total</span>
+                </div>
+            </div>
+            <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1">
+                {data.map(item => (
+                    <div key={item.name} className="flex items-center gap-2 text-sm">
+                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></span>
+                        <span className="text-slate-300">{item.name}</span>
+                        <span className="text-slate-400 font-medium">({item.value})</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const AchievementsList: React.FC<{ achievements: Achievement[] }> = ({ achievements }) => (
+    <Card>
+        <h2 className="text-2xl font-bold flex items-center gap-3 text-slate-100 mb-4">
+            <StarIcon className="w-7 h-7 text-amber-400" /> Achievements
+        </h2>
+        {achievements.length > 0 ? (
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+                {achievements.map(ach => (
+                     <div key={ach.id} className="flex items-center gap-4 p-2 bg-slate-900/50 rounded-lg">
+                        <span className="text-3xl">{ach.icon}</span>
+                        <div>
+                            <h4 className="font-semibold text-slate-200">{ach.name}</h4>
+                            <p className="text-xs text-slate-400">{ach.description}</p>
                         </div>
                     </div>
                 ))}
             </div>
-        </Card>
-    );
-}
-
-const Integrations: React.FC<{ githubUrl?: string; linkedinUrl?: string }> = ({ githubUrl, linkedinUrl }) => (
-    <Card>
-        <h2 className="text-xl font-bold text-slate-100">Professional Links</h2>
-        <div className="mt-4 flex flex-col sm:flex-row gap-4">
-            <a 
-                href={githubUrl}
-                target="_blank" 
-                rel="noopener noreferrer"
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 font-semibold rounded-lg transition-all ${githubUrl ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'}`}
-                aria-disabled={!githubUrl}
-            >
-                <GithubIcon /> GitHub
-            </a>
-            <a 
-                href={linkedinUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 font-semibold rounded-lg transition-all ${linkedinUrl ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'}`}
-                aria-disabled={!linkedinUrl}
-            >
-                <LinkedInIcon /> LinkedIn
-            </a>
-        </div>
+        ) : (
+            <p className="text-center text-slate-400 py-8">Complete projects and roadmap steps to earn achievements!</p>
+        )}
     </Card>
 );
 
-interface DashboardProps {
-  user: UserProfile;
-}
 
-const ProgressOverview: React.FC<{ user: UserProfile, xpForNextLevel: number }> = ({ user, xpForNextLevel }) => {
-    const percentage = Math.min(100, (user.xp / xpForNextLevel) * 100);
-    const circumference = 2 * Math.PI * 54; // 2 * pi * radius
-    const strokeDashoffset = circumference - (percentage / 100) * circumference;
-
-    return (
-        <Card className="col-span-1 md:col-span-3">
-             <h2 className="text-2xl font-bold text-slate-100">Progress Overview</h2>
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4 items-center">
-                <div className="flex flex-col items-center justify-center">
-                    <div className="relative w-40 h-40">
-                        <svg className="w-full h-full" viewBox="0 0 120 120">
-                            <circle cx="60" cy="60" r="54" fill="none" stroke="#334155" strokeWidth="12" />
-                            <circle 
-                                cx="60" cy="60" r="54" fill="none" stroke="url(#levelGradient)" strokeWidth="12"
-                                strokeDasharray={circumference}
-                                strokeDashoffset={strokeDashoffset}
-                                transform="rotate(-90 60 60)"
-                                className="transition-all duration-500"
-                                strokeLinecap="round"
-                            />
-                            <defs>
-                                <linearGradient id="levelGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stopColor="#2dd4bf" />
-                                <stop offset="100%" stopColor="#06b6d4" />
-                                </linearGradient>
-                            </defs>
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-3xl font-bold text-teal-300">Level {user.level}</span>
-                            <span className="text-sm text-slate-400">{user.xp} / {xpForNextLevel} XP</span>
-                        </div>
-                    </div>
-                </div>
-                <div className="flex flex-col items-center justify-center text-center">
-                    <p className="text-6xl font-bold text-amber-400">{user.streak}🔥</p>
-                    <p className="text-slate-300 font-semibold mt-1">Day Streak</p>
-                    <p className="text-sm text-slate-400 mt-2">Keep it up to unlock new achievements!</p>
-                </div>
-                 <div className="flex flex-col items-center justify-center">
-                    <p className="font-semibold text-slate-300 mb-2">Achievements</p>
-                    <div className="flex flex-wrap gap-4 mt-2 justify-center">
-                        {(user.achievements || []).map((badge: Achievement) => (
-                            <span key={badge.name} title={badge.description} className="text-4xl filter grayscale hover:grayscale-0 transition-all cursor-pointer">{badge.icon}</span>
-                        ))}
-                         {(user.achievements || []).length === 0 && <p className="text-sm text-slate-400 self-center">Complete projects to earn badges!</p>}
-                    </div>
-                </div>
-             </div>
-        </Card>
-    );
-};
-
-const DashboardGraphs: React.FC<{ user: UserProfile }> = ({ user }) => {
-    const { skillStats, projectStats, roadmapStats } = useMemo(() => {
-        const skills = user.skills || [];
-        const projects = user.projects || [];
-        const roadmap = user.roadmap || [];
-        
-        const skillCounts = { Beginner: 0, Intermediate: 0, Advanced: 0, Expert: 0 };
-        skills.forEach(s => skillCounts[s.proficiency]++);
-
-        const projectCounts = { 'Not Started': 0, 'In Progress': 0, 'Completed': 0 };
-        projects.forEach(p => projectCounts[p.status]++);
-
-        const completedSteps = roadmap.filter(step => step.completed).length;
-        const totalSteps = roadmap.length;
-
-        return { 
-            skillStats: skillCounts, 
-            projectStats: projectCounts,
-            roadmapStats: { completed: completedSteps, total: totalSteps }
-        };
-    }, [user.skills, user.projects, user.roadmap]);
-
-    const totalSkills = (user.skills || []).length;
-    const totalProjects = (user.projects || []).length;
-
-    const DonutChart = () => {
-        const radius = 60;
-        const circumference = 2 * Math.PI * radius;
-        let offset = 0;
-
-        return (
-             <div className="flex items-center justify-center gap-6">
-                <div className="relative w-40 h-40">
-                    <svg className="w-full h-full -rotate-90" viewBox="0 0 140 140">
-                        {Object.entries(skillStats).map(([proficiency, count]) => {
-                            if (count === 0) return null;
-                            const percentage = (count / totalSkills) * 100;
-                            const dash = (percentage / 100) * circumference;
-                            const currentOffset = offset;
-                            offset += dash;
-                            return (
-                                <circle
-                                    key={proficiency}
-                                    cx="70" cy="70" r={radius} fill="none"
-                                    stroke={proficiencyConfig[proficiency as keyof typeof proficiencyConfig].chartColor}
-                                    strokeWidth="20" strokeDasharray={`${dash} ${circumference}`}
-                                    strokeDashoffset={-currentOffset}
-                                    className="transition-all duration-1000 ease-out"
-                                />
-                            );
-                        })}
-                    </svg>
-                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-3xl font-bold">{totalSkills}</span>
-                        <span className="text-sm text-slate-400">Skills</span>
-                    </div>
-                </div>
-                 <div className="space-y-1.5">
-                    {Object.entries(skillStats).map(([proficiency, count]) => (
-                         <div key={proficiency} className="flex items-center gap-2 text-sm">
-                            <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: proficiencyConfig[proficiency as keyof typeof proficiencyConfig].chartColor }}></div>
-                            <span className="text-slate-300">{proficiency}</span>
-                            <span className="font-semibold text-slate-100">{count}</span>
-                        </div>
-                    ))}
-                </div>
-             </div>
-        );
-    };
-
-    return (
-        <Card>
-            <h2 className="text-xl font-bold text-slate-100 mb-4">At a Glance</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {/* Roadmap Progress */}
-                <div className="flex flex-col items-center">
-                    <h3 className="font-semibold text-center text-slate-200 mb-4">Roadmap Progress</h3>
-                    {roadmapStats.total > 0 ? (
-                        <div className="flex flex-col items-center gap-3">
-                            <div className="relative w-36 h-36">
-                                <svg className="w-full h-full" viewBox="0 0 100 100">
-                                    <circle cx="50" cy="50" r="45" fill="none" stroke="#334155" strokeWidth="10" />
-                                    <circle 
-                                        cx="50" cy="50" r="45" fill="none" stroke="url(#roadmapGradient)" strokeWidth="10"
-                                        strokeDasharray={2 * Math.PI * 45}
-                                        strokeDashoffset={(2 * Math.PI * 45) - (roadmapStats.completed / roadmapStats.total) * (2 * Math.PI * 45)}
-                                        transform="rotate(-90 50 50)"
-                                        className="transition-all duration-1000"
-                                        strokeLinecap="round"
-                                    />
-                                    <defs>
-                                        <linearGradient id="roadmapGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                            <stop offset="0%" stopColor="#fbbf24" />
-                                            <stop offset="100%" stopColor="#f87171" />
-                                        </linearGradient>
-                                    </defs>
-                                </svg>
-                                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                    <span className="text-3xl font-bold text-amber-300">
-                                        {Math.round((roadmapStats.completed / roadmapStats.total) * 100)}%
-                                    </span>
-                                    <span className="text-xs text-slate-400">Complete</span>
-                                </div>
-                            </div>
-                            <p className="text-sm font-semibold text-slate-300">{roadmapStats.completed} of {roadmapStats.total} steps done</p>
-                        </div>
-                    ) : <p className="text-center text-slate-400 py-8">No roadmap created yet.</p>}
-                </div>
-
-                {/* Skill Distribution */}
-                <div className="flex flex-col items-center">
-                    <h3 className="font-semibold text-center text-slate-200 mb-4">Skill Distribution</h3>
-                    {totalSkills > 0 ? <DonutChart /> : <p className="text-center text-slate-400 py-8">No skills added yet.</p>}
-                </div>
-
-                {/* Project Status */}
-                <div className="flex flex-col">
-                    <h3 className="font-semibold text-center text-slate-200 mb-4">Project Status</h3>
-                    {totalProjects > 0 ? (
-                        <div className="space-y-4">
-                            {Object.entries(projectStats).map(([status, count]) => {
-                                const colors = {
-                                    'Not Started': 'bg-slate-500',
-                                    'In Progress': 'bg-sky-500',
-                                    'Completed': 'bg-emerald-500'
-                                };
-                                return (
-                                    <div key={status}>
-                                        <div className="flex justify-between text-sm font-medium text-slate-300 mb-1">
-                                            <span>{status}</span>
-                                            <span>{count} / {totalProjects}</span>
-                                        </div>
-                                        <div className="w-full bg-slate-700/50 rounded-full h-2.5">
-                                            <div 
-                                                className={`${colors[status as keyof typeof colors]} h-2.5 rounded-full transition-all duration-1000 ease-out`}
-                                                style={{ width: `${(count / totalProjects) * 100}%`}}
-                                            ></div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    ) : (
-                        <div className="text-center text-slate-400 py-8">
-                            <ProjectIcon className="w-8 h-8 mx-auto text-slate-500 mb-2"/>
-                            No projects to display.
-                        </div>
-                    )}
-                </div>
-            </div>
-        </Card>
-    );
-};
-
-
-const Dashboard: React.FC<DashboardProps> = ({ user }) => {
-    const xpForNextLevel = (user.level + 1) * 250;
+const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
     const [selectedSkill, setSelectedSkill] = useState<SkillGap | null>(null);
-    const [relatedItems, setRelatedItems] = useState<{ projects: UserProject[], roadmapSteps: RoadmapStep[] }>({ projects: [], roadmapSteps: [] });
+    const [isDownloading, setIsDownloading] = useState(false);
+    const nextMilestone = user.roadmap.find(step => !step.completed);
+    const inProgressProject = user.projects.find(p => p.status === 'In Progress');
+    const xpForNextLevel = 500;
+    const currentLevelXp = Number(user.xp) % xpForNextLevel;
+    
+    const findRelatedItems = (skillName: string) => {
+        const relatedRoadmapSteps = user.roadmap.filter(step => step.skillsToLearn.includes(skillName));
+        const relatedProjects = user.projects.filter(project => project.requiredSkills.includes(skillName));
+        return { relatedRoadmapSteps, relatedProjects };
+    };
 
     const handleSkillClick = (skill: SkillGap) => {
-        const relatedProjects = (user.projects || []).filter(p => (p.requiredSkills || []).includes(skill.name));
-        const relatedRoadmapSteps = (user.roadmap || []).filter(r => (r.skillsToLearn || []).includes(skill.name));
-        setRelatedItems({ projects: relatedProjects, roadmapSteps: relatedRoadmapSteps });
         setSelectedSkill(skill);
     };
-    
+
+    const handleDownloadJourney = () => {
+        setIsDownloading(true);
+        try {
+            const reportHtml = generateJourneyReportHTML(user);
+            const blob = new Blob(['\ufeff', reportHtml], {
+                type: 'application/msword;charset=utf-8',
+            });
+            
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${user.name.replace(/\s+/g, '_')}_Journey_Report.doc`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("Failed to generate or download report:", error);
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
+    const skillProficiencyData = useMemo(() => {
+        const counts = user.skills.reduce((acc, skill) => {
+            acc[skill.proficiency] = (acc[skill.proficiency] || 0) + 1;
+            return acc;
+        }, {} as Record<SkillGap['proficiency'], number>);
+        return [
+            { name: 'Beginner', value: counts.Beginner || 0, color: '#3b82f6' },
+            { name: 'Intermediate', value: counts.Intermediate || 0, color: '#2dd4bf' },
+            { name: 'Advanced', value: counts.Advanced || 0, color: '#a855f7' },
+            { name: 'Expert', value: counts.Expert || 0, color: '#f59e0b' },
+        ];
+    }, [user.skills]);
+
+     const projectStatusData = useMemo(() => {
+        const counts = user.projects.reduce((acc, project) => {
+            acc[project.status] = (acc[project.status] || 0) + 1;
+            return acc;
+        }, {} as Record<UserProject['status'], number>);
+        return [
+            { name: 'Not Started', value: counts['Not Started'] || 0, color: '#64748b' },
+            { name: 'In Progress', value: counts['In Progress'] || 0, color: '#38bdf8' },
+            { name: 'Completed', value: counts['Completed'] || 0, color: '#4ade80' },
+        ];
+    }, [user.projects]);
+
+    const StatCard: React.FC<{ label: string; value: string | number; icon: React.ReactNode }> = ({ label, value, icon }) => (
+        <div className="bg-slate-900/50 p-4 rounded-xl flex items-center gap-4">
+            <div className="p-2 bg-slate-700/50 rounded-lg">{icon}</div>
+            <div>
+                <p className="text-slate-400 text-sm font-medium">{label}</p>
+                <p className="text-xl font-bold text-white">{value}</p>
+            </div>
+        </div>
+    );
+
     return (
         <div className="p-4 sm:p-6 md:p-8 space-y-8">
-            <header>
-                <h1 className="text-4xl font-bold text-slate-100">Welcome back, {user.name}!</h1>
-                <p className="text-slate-400 mt-2 text-lg">Your mission today: progress towards your <span className="font-semibold text-teal-300">{user.targetRole}</span> goal! 💪</p>
+            <header className="flex justify-between items-start">
+                <div>
+                    <h1 className="text-4xl font-bold text-slate-100">Welcome back, {user.name}!</h1>
+                    <p className="text-slate-400 mt-2 text-lg">Here's a snapshot of your journey to becoming a <span className="font-semibold text-teal-300">{user.targetRole}</span>.</p>
+                </div>
+                 <button 
+                    onClick={handleDownloadJourney}
+                    disabled={isDownloading}
+                    className="flex-shrink-0 ml-4 inline-flex items-center justify-center gap-2 px-4 py-2 font-semibold text-white bg-slate-700/80 rounded-lg hover:bg-slate-600/80 disabled:opacity-50 transition-colors shadow-md"
+                >
+                    <DownloadIcon className="w-5 h-5" />
+                    {isDownloading ? 'Generating...' : 'Download My Journey'}
+                </button>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-               <ProgressOverview user={user} xpForNextLevel={xpForNextLevel} />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard label="Level" value={user.level} icon={<StarIcon className="w-6 h-6 text-amber-400" />} />
+                <StatCard label="XP" value={user.xp} icon={<SparklesIcon className="w-6 h-6 text-teal-400" />} />
+                <StatCard label="Day Streak" value={user.streak} icon={<TrendingUpIcon className="w-6 h-6 text-green-400" />} />
+                <Card className="p-4 flex items-center justify-center">
+                    <ProgressBar value={currentLevelXp} max={xpForNextLevel} label={`Level ${user.level}`} />
+                </Card>
             </div>
 
-            <DashboardGraphs user={user} />
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                <SkillHeatmap skills={user.skills} onSkillClick={handleSkillClick} />
-                <div className="space-y-6">
-                    <Integrations githubUrl={user.githubUrl} linkedinUrl={user.linkedinUrl} />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                       <Card>
+                            <h2 className="text-2xl font-bold flex items-center gap-3 text-slate-100"><SparklesIcon className="w-7 h-7 text-teal-400" /> Next Milestone</h2>
+                            {nextMilestone ? (
+                                <div className="mt-4 p-4 bg-slate-900/50 rounded-lg">
+                                    <h3 className="font-bold text-lg text-teal-300">{nextMilestone.title}</h3>
+                                    <p className="text-slate-400 text-sm font-medium mb-2">{nextMilestone.duration}</p>
+                                    <p className="text-slate-300">{nextMilestone.milestoneProject}</p>
+                                </div>
+                            ) : (
+                                <p className="mt-4 text-center text-slate-400 py-4">You've completed your roadmap! 🎉</p>
+                            )}
+                        </Card>
+                        <Card>
+                            <h2 className="text-2xl font-bold flex items-center gap-3 text-slate-100"><ProjectIcon /> Active Project</h2>
+                            {inProgressProject ? (
+                                <div className="mt-4 p-4 bg-slate-900/50 rounded-lg">
+                                     <h3 className="font-bold text-lg text-teal-300">{inProgressProject.title}</h3>
+                                     <p className="text-slate-400 text-sm font-medium mb-2">{inProgressProject.difficulty}</p>
+                                     <p className="text-slate-300 line-clamp-2">{inProgressProject.description}</p>
+                                </div>
+                            ) : (
+                                 <p className="mt-4 text-center text-slate-400 py-4">No projects in progress. Start one!</p>
+                            )}
+                        </Card>
+                    </div>
+                     <Card>
+                        <h2 className="text-2xl font-bold flex items-center gap-3 text-slate-100"><BrainIcon /> Your Skills</h2>
+                        <p className="text-slate-400 mt-1 mb-4 text-sm">Click a skill to see related projects and roadmap steps.</p>
+                        <div className="flex flex-wrap gap-2">
+                            {user.skills.map(skill => (
+                                <button key={skill.name} onClick={() => handleSkillClick(skill)} className={`px-3 py-1 text-sm font-medium rounded-full transition-colors ${skill.isGap ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30' : 'bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30'}`}>
+                                    {skill.name}
+                                </button>
+                            ))}
+                        </div>
+                    </Card>
+                </div>
+                <div className="space-y-8">
+                     <AchievementsList achievements={user.achievements} />
                 </div>
             </div>
-            
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <Card><DonutChart data={skillProficiencyData} title="Skill Proficiency" /></Card>
+                <Card><DonutChart data={projectStatusData} title="Project Status" /></Card>
+            </div>
+
             {selectedSkill && (
                 <SkillDetailModal 
                     skill={selectedSkill}
-                    relatedProjects={relatedItems.projects}
-                    relatedRoadmapSteps={relatedItems.roadmapSteps}
                     onClose={() => setSelectedSkill(null)}
+                    {...findRelatedItems(selectedSkill.name)}
                 />
             )}
         </div>

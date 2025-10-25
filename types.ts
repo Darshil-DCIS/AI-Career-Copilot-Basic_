@@ -1,7 +1,7 @@
 export interface Skill {
   name: string;
   proficiency: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
-  category: string; // Changed from enum to string for flexibility
+  category: string[]; // Changed from string to string[] for nesting
 }
 
 export interface SkillGap extends Skill {
@@ -63,6 +63,23 @@ export interface InterviewSession {
     feedbackSummary: string;
 }
 
+export interface QuizQuestion {
+  question: string;
+  type: 'mcq'; // For now, only multiple choice is supported
+  options: string[];
+  answer: string;
+  explanation: string;
+}
+
+export interface QuizSession {
+    date: string;
+    targetRole: string;
+    topics: string[];
+    questions: { question: QuizQuestion; userAnswer: string; isCorrect: boolean }[];
+    score: number; // percentage
+}
+
+
 export interface VoiceSession {
     date: string;
     transcript: { speaker: 'user' | 'model'; text: string }[];
@@ -70,6 +87,7 @@ export interface VoiceSession {
 }
 
 export interface Achievement {
+  id: string; // Unique identifier for the achievement
   name: string;
   description: string;
   icon: string; // emoji
@@ -107,6 +125,7 @@ export interface UserProfile {
   linkedinUrl?: string;
   interviewHistory: InterviewSession[];
   voiceMentorHistory: VoiceSession[];
+  quizHistory: QuizSession[];
 }
 
 export interface ResumeFeedback {

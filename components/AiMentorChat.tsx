@@ -11,6 +11,7 @@ type ChatMode = 'mentor' | 'quick' | 'deep' | 'web' | 'networking';
 
 const API_KEY = process.env.API_KEY;
 if (!API_KEY) throw new Error("API_KEY environment variable not set");
+// FIX: Correctly instantiate GoogleGenAI with a named apiKey parameter as per the guidelines.
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 const SmartChat: React.FC<SmartChatProps> = ({ user }) => {
@@ -68,7 +69,8 @@ Keep your answers concise but impactful. Your goal is to be a true copilot on th
             }
 
 
-            const modelForMode = chatMode === 'quick' ? 'gemini-2.5-flash-lite' : 'gemini-2.5-pro';
+            // FIX: Updated deprecated model names to recommended versions.
+            const modelForMode = chatMode === 'quick' ? 'gemini-flash-lite-latest' : 'gemini-2.5-pro';
             const config: { systemInstruction: string, thinkingConfig?: any } = { systemInstruction };
             if (chatMode === 'deep') {
                 config.thinkingConfig = { thinkingBudget: 32768 };

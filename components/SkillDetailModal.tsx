@@ -23,7 +23,8 @@ const SkillDetailModal: React.FC<SkillDetailModalProps> = ({ skill, relatedRoadm
         <div className="flex justify-between items-start">
             <div>
                 <h2 className="text-2xl font-bold text-teal-300">{skill.name}</h2>
-                <p className="text-slate-400 font-semibold">{skill.category} - {skill.proficiency}</p>
+                {/* FIX: Use .join() on the category array to render it as a string and avoid an arithmetic type error. */}
+                <p className="text-slate-400 font-semibold">{(Array.isArray(skill.category) ? skill.category.join(' / ') : skill.category) || 'Uncategorized'} - {skill.proficiency}</p>
             </div>
             <button onClick={onClose} className="text-2xl text-slate-400 hover:text-white">&times;</button>
         </div>
