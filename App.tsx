@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import type { UserProfile, InterviewSession, VoiceSession, UserProject, Achievement, SkillGap } from './types';
+import type { UserProfile, InterviewSession, VoiceSession, UserProject, Achievement, SkillGap, JobPosting, TrackedJob, TrackedJobStatus } from './types';
 import Dashboard from './components/Dashboard';
 import SmartChat from './components/AiMentorChat';
 import ResumeFeedback from './components/ResumeFeedback';
@@ -13,7 +13,7 @@ import ProfileEditor from './components/ProfileEditor';
 import JobFinder from './components/JobFinder';
 import TrendWatcher from './components/TrendWatcher';
 import { DashboardIcon, ChatIcon, ResumeIcon, SparklesIcon, InterviewIcon, MicrophoneIcon, MapPinIcon, LogoutIcon, ProjectIcon, UserIcon, BriefcaseIcon, TrendingUpIcon } from './components/icons';
-import { generateSkillMap, generateRoadmap, generateProjectSuggestions, getFutureSkillTrends } from './services/geminiService';
+import { generateSkillMap, generateRoadmap, generateProjectSuggestions, getIndustryTrends } from './services/geminiService';
 import { supabase } from './supabaseClient';
 import { Session } from '@supabase/supabase-js';
 
@@ -92,7 +92,7 @@ const App: React.FC = () => {
             const [roadmap, projects, trends] = await Promise.all([
                 generateRoadmap(skills, targetRole),
                 generateProjectSuggestions(skills),
-                getFutureSkillTrends(targetRole)
+                getIndustryTrends(targetRole)
             ]);
 
             const profileData: UserProfile = {
@@ -104,9 +104,11 @@ const App: React.FC = () => {
                 streak: 1,
                 skills,
                 roadmap,
-                projects: (projects || []).map(p => ({ ...p, status: 'Not Started' })),
+                // FIX: Use 'as const' to prevent TypeScript from widening the 'Not Started' literal to a generic 'string' type.
+                projects: (projects || []).map(p => ({ ...p, status: 'Not Started' as const })),
                 achievements: [],
-                futureTrends: trends,
+                trends: trends,
+                trackedJobs: [],
                 githubUrl: githubUrl || undefined,
                 linkedinUrl: linkedinUrl || undefined,
                 interviewHistory: [],
@@ -175,13 +177,14 @@ const App: React.FC = () => {
                 const [newRoadmap, newProjects, newTrends] = await Promise.all([
                     generateRoadmap(optimisticUser.skills, newTargetRole),
                     generateProjectSuggestions(optimisticUser.skills),
-                    getFutureSkillTrends(newTargetRole)
+                    getIndustryTrends(newTargetRole)
                 ]);
                 const regeneratedUser = { 
                     ...optimisticUser, 
                     roadmap: newRoadmap, 
-                    projects: (newProjects || []).map(p => ({ ...p, status: 'Not Started' })),
-                    futureTrends: newTrends
+                    // FIX: Use 'as const' to prevent TypeScript from widening the 'Not Started' literal to a generic 'string' type.
+                    projects: (newProjects || []).map(p => ({ ...p, status: 'Not Started' as const })),
+                    trends: newTrends
                 };
                 await updateUserInDatabase(regeneratedUser);
                 setUser(regeneratedUser); // Set final state
@@ -257,7 +260,8 @@ const App: React.FC = () => {
         if (!user) return;
         setIsLoading(true);
         const newProjects = await generateProjectSuggestions(user.skills || [], prompt);
-        await handleUpdateProfile({ projects: (newProjects || []).map(p => ({ ...p, status: 'Not Started' })) });
+        // FIX: Use 'as const' to prevent TypeScript from widening the 'Not Started' literal to a generic 'string' type.
+        await handleUpdateProfile({ projects: (newProjects || []).map(p => ({ ...p, status: 'Not Started' as const })) });
         setIsLoading(false);
     };
 
@@ -269,6 +273,25 @@ const App: React.FC = () => {
     const handleSaveVoiceSession = (sessionData: VoiceSession) => {
         if(!user) return;
         handleUpdateProfile({ voiceMentorHistory: [sessionData, ...(user.voiceMentorHistory || [])] });
+    };
+
+    const handleTrackJob = (jobToTrack: JobPosting) => {
+        if (!user) return;
+        const currentTrackedJobs = user.trackedJobs || [];
+        if (currentTrackedJobs.some(j => j.url === jobToTrack.url)) {
+            alert("This job is already on your board.");
+            return;
+        }
+        const newTrackedJob: TrackedJob = { ...jobToTrack, status: 'Applied' };
+        handleUpdateProfile({ trackedJobs: [...currentTrackedJobs, newTrackedJob] });
+    };
+
+    const handleUpdateTrackedJobStatus = (jobUrl: string, newStatus: TrackedJobStatus) => {
+        if (!user) return;
+        const updatedJobs = (user.trackedJobs || []).map(job => 
+            job.url === jobUrl ? { ...job, status: newStatus } : job
+        );
+        handleUpdateProfile({ trackedJobs: updatedJobs });
     };
     
     if (appError) {
@@ -306,14 +329,14 @@ const App: React.FC = () => {
 
     const views: Record<View, React.ReactNode> = {
         dashboard: <Dashboard user={user} />,
-        journey: <MyJourney user={user} onRoadmapToggle={handleRoadmapToggle} onUpdateProject={handleUpdateProject} onRegenerateRoadmap={handleRegenerateRoadmap} onRegenerateProjects={handleRegenerateProjects} />,
+        journey: <MyJourney user={user} onRoadmapToggle={handleRoadmapToggle} onUpdateProject={handleUpdateProject} onRegenerateRoadmap={handleRegenerateRoadmap} onRegenerateProjects={handleRegenerateProjects} onTrackJob={handleTrackJob} />,
         chat: <SmartChat user={user} />,
-        resume: <ResumeFeedback />,
+        resume: <ResumeFeedback user={user} />,
         interview: <InterviewCoach user={user} onSaveInterview={handleSaveInterview} />,
         voice: <VoiceMentor user={user} onSaveSession={handleSaveVoiceSession} />,
         courses: <CourseFinder />,
-        jobs: <JobFinder user={user} />,
-        trends: <TrendWatcher user={user} />,
+        jobs: <JobFinder user={user} onTrackJob={handleTrackJob} onUpdateTrackedJobStatus={handleUpdateTrackedJobStatus} />,
+        trends: <TrendWatcher user={user} onUpdateTrends={async () => handleUpdateProfile({ trends: await getIndustryTrends(user.targetRole) })} />,
         profile: <ProfileEditor user={user} onUpdateProfile={handleUpdateProfile} />
     }
 

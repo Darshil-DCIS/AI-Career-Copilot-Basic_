@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import type { UserProfile, RoadmapStep, UserProject } from '../types';
+import React, { useState, useEffect } from 'react';
+import type { UserProfile, RoadmapStep, UserProject, JobPosting } from '../types';
 import Card from './common/Card';
-import { ProjectIcon, SparklesIcon, ReloadIcon } from './icons';
+import { ProjectIcon, SparklesIcon, ReloadIcon, BriefcaseIcon, PlusIcon } from './icons';
 import RoadmapDetailModal from './RoadmapDetailModal';
 import ProjectDetailModal from './ProjectDetailModal';
+import { findJobs } from '../services/geminiService';
 
 interface MyJourneyProps {
   user: UserProfile;
@@ -11,23 +12,26 @@ interface MyJourneyProps {
   onUpdateProject: (updatedProject: UserProject) => void;
   onRegenerateRoadmap: (prompt: string) => Promise<void>;
   onRegenerateProjects: (prompt: string) => Promise<void>;
+  onTrackJob: (job: JobPosting) => void;
 }
 
 const RoadmapItem: React.FC<{ item: RoadmapStep, index: number, onToggle: (index: number) => void, onSelect: () => void, isLast: boolean }> = ({ item, index, onToggle, onSelect, isLast }) => (
-    <div className="flex items-start gap-4 group">
-        <div className="flex flex-col items-center h-full">
+    <div className="flex items-start gap-4 group relative">
+        <div className="flex flex-col items-center h-full absolute left-3 top-0 bottom-0 z-0">
+            {!isLast && <div className="w-0.5 flex-grow bg-slate-700 mt-8 group-hover:bg-teal-800 transition-colors"></div>}
+        </div>
+        <div className="flex items-center gap-4 z-10 w-full">
             <button 
                 onClick={(e) => { e.stopPropagation(); onToggle(index); }}
-                className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${item.completed ? 'bg-teal-600 border-teal-500' : 'bg-slate-700 border-slate-600 group-hover:border-teal-500'}`}
+                className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all bg-slate-800 ${item.completed ? 'bg-teal-600 border-teal-500' : 'border-slate-600 group-hover:border-teal-500'}`}
                 aria-label={item.completed ? `Mark ${item.title} as incomplete` : `Mark ${item.title} as complete`}
             >
                 {item.completed && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}
             </button>
-            {!isLast && <div className="w-0.5 flex-grow bg-slate-700 my-2 group-hover:bg-teal-800 transition-colors"></div>}
-        </div>
-        <div onClick={onSelect} className={`pt-0.5 transition-opacity cursor-pointer w-full ${item.completed ? 'opacity-60' : 'opacity-100'}`}>
-            <p className={`font-semibold group-hover:text-teal-300 transition-colors ${item.completed ? 'line-through text-slate-400' : 'text-slate-100'}`}>{item.title} <span className="text-xs font-normal text-slate-400 ml-2">{item.duration}</span></p>
-            <p className="text-sm text-slate-300 mt-1">{item.milestoneProject}</p>
+            <div onClick={onSelect} className={`transition-opacity cursor-pointer w-full bg-slate-800/50 p-3 rounded-lg border border-transparent group-hover:border-teal-600/50 ${item.completed ? 'opacity-60' : 'opacity-100'}`}>
+                <p className={`font-semibold transition-colors ${item.completed ? 'line-through text-slate-400' : 'text-slate-100'}`}>{item.title} <span className="text-xs font-normal text-slate-400 ml-2">{item.duration}</span></p>
+                <p className="text-sm text-slate-300 mt-1">{item.milestoneProject}</p>
+            </div>
         </div>
     </div>
 );
@@ -70,7 +74,58 @@ const RefineInput: React.FC<{ onRefine: (prompt: string) => void, placeholder: s
     );
 };
 
-const MyJourney: React.FC<MyJourneyProps> = ({ user, onRoadmapToggle, onUpdateProject, onRegenerateRoadmap, onRegenerateProjects }) => {
+const JobSuggestions: React.FC<{ user: UserProfile, onTrackJob: (job: JobPosting) => void }> = ({ user, onTrackJob }) => {
+    const [jobs, setJobs] = useState<JobPosting[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchJobSuggestions = async () => {
+            setIsLoading(true);
+            const suggestedJobs = await findJobs(user.targetRole, '');
+            setJobs(suggestedJobs.slice(0, 3)); // Show top 3 suggestions
+            setIsLoading(false);
+        };
+        fetchJobSuggestions();
+    }, [user.targetRole]);
+
+    const isTracked = (jobUrl: string) => {
+        return user.trackedJobs?.some(trackedJob => trackedJob.url === jobUrl);
+    };
+
+    return (
+        <Card>
+            <h2 className="text-2xl font-bold flex items-center gap-3 text-slate-100"><BriefcaseIcon /> Job Suggestions</h2>
+            <p className="text-sm text-slate-400 mt-1">Relevant opportunities based on your target role.</p>
+            <div className="mt-4 space-y-3">
+                {isLoading ? (
+                    <p className="text-slate-400 text-center py-4">Finding relevant jobs for you...</p>
+                ) : jobs.length > 0 ? (
+                    jobs.map(job => (
+                        <div key={job.url} className="bg-slate-900/50 p-3 rounded-lg flex justify-between items-center gap-2">
+                           <div>
+                                <a href={job.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-slate-200 hover:text-teal-300 transition-colors">{job.title}</a>
+                                <p className="text-sm text-slate-400">{job.company}</p>
+                           </div>
+                            <button 
+                                onClick={() => onTrackJob(job)} 
+                                disabled={isTracked(job.url)}
+                                className="p-2 bg-slate-700 hover:bg-slate-600 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={isTracked(job.url) ? "Already tracked" : "Add to job board"}
+                            >
+                                <PlusIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                    ))
+                ) : (
+                    <p className="text-slate-400 text-center py-4">No job suggestions found at the moment.</p>
+                )}
+            </div>
+        </Card>
+    );
+};
+
+
+const MyJourney: React.FC<MyJourneyProps> = ({ user, onRoadmapToggle, onUpdateProject, onRegenerateRoadmap, onRegenerateProjects, onTrackJob }) => {
     const [selectedRoadmapStep, setSelectedRoadmapStep] = useState<RoadmapStep | null>(null);
     const [selectedProject, setSelectedProject] = useState<UserProject | null>(null);
 
@@ -82,16 +137,20 @@ const MyJourney: React.FC<MyJourneyProps> = ({ user, onRoadmapToggle, onUpdatePr
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                <Card>
-                    <h2 className="text-2xl font-bold flex items-center gap-3 text-slate-100"><SparklesIcon className="w-7 h-7 text-teal-400" /> AI-Generated Roadmap</h2>
-                    <RefineInput onRefine={onRegenerateRoadmap} placeholder="e.g., focus more on backend skills..." />
-                    <div className="mt-6 flex flex-col gap-2">
-                        {(user.roadmap || []).map((item, index) => (
-                            <RoadmapItem key={index} item={item} index={index} onToggle={onRoadmapToggle} isLast={index === (user.roadmap || []).length - 1} onSelect={() => setSelectedRoadmapStep(item)}/>
-                        ))}
-                         {(user.roadmap || []).length === 0 && <p className="text-center text-slate-400 py-4">No roadmap steps generated yet.</p>}
-                    </div>
-                </Card>
+                <div className="space-y-8">
+                    <Card>
+                        <h2 className="text-2xl font-bold flex items-center gap-3 text-slate-100"><SparklesIcon className="w-7 h-7 text-teal-400" /> AI-Generated Roadmap</h2>
+                        <RefineInput onRefine={onRegenerateRoadmap} placeholder="e.g., focus more on backend skills..." />
+                        <div className="mt-6 flex flex-col gap-2 relative">
+                            {(user.roadmap || []).map((item, index) => (
+                                <RoadmapItem key={index} item={item} index={index} onToggle={onRoadmapToggle} isLast={index === (user.roadmap || []).length - 1} onSelect={() => setSelectedRoadmapStep(item)}/>
+                            ))}
+                             {(user.roadmap || []).length === 0 && <p className="text-center text-slate-400 py-4">No roadmap steps generated yet.</p>}
+                        </div>
+                    </Card>
+                    <JobSuggestions user={user} onTrackJob={onTrackJob} />
+                </div>
+                
 
                 <Card>
                     <h2 className="text-2xl font-bold flex items-center gap-3 text-slate-100"><ProjectIcon /> Suggested Projects</h2>

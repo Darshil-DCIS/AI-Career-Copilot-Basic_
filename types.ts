@@ -42,9 +42,12 @@ export interface UserProject extends ProjectSuggestion {
   projectPlan?: ProjectStep[];
 }
 
-export interface FutureTrend {
-  skill: string;
-  reason: string;
+export type TrendType = 'Current' | 'Future';
+
+export interface Trend {
+  title: string;
+  summary: string;
+  type: TrendType;
 }
 
 export interface ChatMessage {
@@ -72,6 +75,21 @@ export interface Achievement {
   icon: string; // emoji
 }
 
+export type TrackedJobStatus = 'Applied' | 'Interviewing' | 'Offered' | 'Rejected' | 'Tentative';
+
+export interface JobPosting {
+    title: string;
+    company: string;
+    location: string;
+    url: string;
+    description: string;
+}
+
+export interface TrackedJob extends JobPosting {
+    status: TrackedJobStatus;
+}
+
+
 export interface UserProfile {
   id?: string;
   name: string;
@@ -83,7 +101,8 @@ export interface UserProfile {
   roadmap: RoadmapStep[];
   projects: UserProject[];
   achievements: Achievement[];
-  futureTrends: FutureTrend[];
+  trends: Trend[];
+  trackedJobs?: TrackedJob[];
   githubUrl?: string;
   linkedinUrl?: string;
   interviewHistory: InterviewSession[];
@@ -108,12 +127,4 @@ export interface Course {
     url: string;
     type: 'Online' | 'Local';
     rating?: number;
-}
-
-export interface JobPosting {
-    title: string;
-    company: string;
-    location: string;
-    url: string;
-    description: string;
 }

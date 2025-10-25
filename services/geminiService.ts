@@ -1,7 +1,5 @@
-
-
 import { GoogleGenAI, Type } from "@google/genai";
-import type { Skill, RoadmapStep, ProjectSuggestion, ResumeFeedback, SkillGap, FutureTrend, Course, ChatMessage, VoiceSession, ProjectStep, JobPosting } from '../types';
+import type { Skill, RoadmapStep, ProjectSuggestion, ResumeFeedback, SkillGap, Trend, Course, ChatMessage, VoiceSession, ProjectStep, JobPosting, UserProfile } from '../types';
 
 const API_KEY = process.env.API_KEY;
 
@@ -208,13 +206,17 @@ export const generateProjectPlan = async (projectTitle: string, projectDescripti
 };
 
 
-export const getFutureSkillTrends = async (targetRole: string): Promise<FutureTrend[]> => {
+export const getIndustryTrends = async (targetRole: string): Promise<Trend[]> => {
     const prompt = `
-        Analyze the future of the "${targetRole}" profession. Identify 4-5 key emerging trends, covering new skills, important tools, and shifting methodologies. 
-        For each trend, provide a concise name (as 'skill') and a detailed explanation (as 'reason') of why it's becoming crucial, citing specific examples or developments.
-        Use Google Search to gather the most current information. IMPORTANT: Your response MUST be only a valid JSON array of objects, without any markdown formatting or other text.
+        Act as an industry analyst for the "${targetRole}" profession. Use Google Search to find two types of information:
+        1.  **Current Buzz**: Identify 3-4 recent (last 6 months) and significant developments. This could include major news, important discoveries, influential new tools, or impactful project launches.
+        2.  **Future Forecast**: Identify 3-4 emerging trends that will be important in the next 1-3 years. This could include new skills, shifting methodologies, or upcoming technologies.
+
+        For each item, provide a clear title and a concise summary explaining its relevance. Classify each item with the 'type' as either 'Current' or 'Future'.
+        IMPORTANT: Your response MUST be only a valid JSON array of objects, without any markdown formatting or other text.
     `;
     
+    // FIX: Removed responseSchema definition and usage below as it is not supported with the googleSearch tool.
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -225,13 +227,81 @@ export const getFutureSkillTrends = async (targetRole: string): Promise<FutureTr
         });
 
         const text = response.text.trim().replace(/^```json\n?/, '').replace(/```$/, '');
-        return JSON.parse(text) as FutureTrend[];
+        return JSON.parse(text) as Trend[];
 
     } catch (error) {
-        console.error("Error generating future trends:", error);
-        return [];
+        console.error("Error generating industry trends:", error);
+        // Fallback for parsing error
+        try {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt + "\n\nOriginal response failed parsing. Please ensure your output is a valid JSON array.",
+                config: {
+                    tools: [{googleSearch: {}}],
+                }
+            });
+            const text = response.text.trim().replace(/^```json\n?/, '').replace(/```$/, '');
+            return JSON.parse(text) as Trend[];
+        } catch (fallbackError) {
+             console.error("Fallback for industry trends also failed:", fallbackError);
+            return [];
+        }
     }
 }
+
+export const buildResume = async (
+    user: UserProfile, 
+    includedSections: { summary: boolean; skills: boolean; projects: boolean; experience: boolean; }
+): Promise<string> => {
+    const { name, targetRole, skills, projects, linkedinUrl, githubUrl } = user;
+    const completedProjects = (projects || []).filter(p => p.status === 'Completed');
+
+    const sections = [
+        { key: 'summary', title: 'Summary', prompt: 'A compelling 2-3 sentence professional summary tailored to the target role, highlighting key skills and ambitions.' },
+        { key: 'skills', title: 'Skills', prompt: 'A categorized list of skills. Group them logically based on their category (e.g., Programming Languages, Frameworks, Tools, Soft Skills).' },
+        { key: 'projects', title: 'Projects', prompt: 'A section for "Portfolio Projects". For each project, list the title, a concise one-sentence description focusing on the achievement, and the technologies/skills used.' },
+        { key: 'experience', title: 'Experience/Education', prompt: 'Create placeholder sections for "Professional Experience" and "Education" with instructions for the user to fill them in (e.g., "[Your Job Title], [Company Name], [Dates]").' },
+    ];
+
+    const requestedSections = sections.filter(s => includedSections[s.key as keyof typeof includedSections]);
+
+    let structurePrompt = 'Structure the resume with the following sections in this order:\n1.  **Header**: Name, Target Role, and contact links.\n';
+    requestedSections.forEach((section, index) => {
+        structurePrompt += `${index + 2}.  **${section.title}**: ${section.prompt}\n`;
+    });
+
+    const prompt = `
+        Act as a professional resume writer. Create a professional, one-page resume in MARKDOWN format for ${name}, who is targeting the role of "${targetRole}".
+        
+        Use the following information where applicable for the requested sections:
+        - **Name**: ${name}
+        - **Target Role**: ${targetRole}
+        - **Contact Links**: LinkedIn: ${linkedinUrl || 'N/A'}, GitHub/Portfolio: ${githubUrl || 'N/A'}
+        - **Skills**: 
+          ${(skills || []).map(s => `- ${s.name} (${s.proficiency}, Category: ${s.category})`).join('\n')}
+        - **Completed Projects**:
+          ${completedProjects.length > 0 ? completedProjects.map(p => `
+            - **Title**: ${p.title}
+            - **Description**: ${p.description}
+            - **Skills Used**: ${p.requiredSkills.join(', ')}
+          `).join('\n') : 'No completed projects to display.'}
+
+        ${structurePrompt}
+        The final output should be a single block of well-formatted Markdown. Only include the requested sections after the header.
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-pro',
+            contents: prompt,
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Error building resume:", error);
+        return "Error: Could not generate resume. Please try again.";
+    }
+};
+
 
 export const getResumeFeedback = async (resumeText: string, targetRole: string): Promise<ResumeFeedback | null> => {
     const prompt = `
