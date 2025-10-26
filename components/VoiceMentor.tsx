@@ -59,7 +59,7 @@ const VoiceMentor: React.FC<{ user: UserProfile, onSaveSession: (session: VoiceS
                 config: {
                     responseModalities: [Modality.AUDIO],
                     speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' }}},
-                    systemInstruction: `You are an AI Career Mentor for ${user.name}, who is preparing for a "${user.targetRole}" role. Be encouraging and provide concise, helpful advice.`,
+                    systemInstruction: `You are an AI Career Mentor for ${user.name}, a ${user.age}-year-old ${user.profession}, who is preparing for a "${user.targetRole}" role. Be encouraging and provide concise, helpful advice relevant to their background.`,
                     inputAudioTranscription: {},
                     outputAudioTranscription: {},
                 },
@@ -119,7 +119,7 @@ const VoiceMentor: React.FC<{ user: UserProfile, onSaveSession: (session: VoiceS
     
     const stopSession = async () => {
         if (transcript.length > 0) {
-            const summary = await summarizeVoiceSession(transcript, user.name, user.targetRole);
+            const summary = await summarizeVoiceSession(transcript, user);
             onSaveSession({ date: new Date().toISOString(), transcript, keyTakeaways: summary });
         }
         if (sessionPromiseRef.current) {

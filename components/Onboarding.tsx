@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { SparklesIcon } from './icons';
 
 interface OnboardingProps {
-  onComplete: (interests: string, resume: string, targetRole: string, githubUrl: string, linkedinUrl: string) => void;
+  onComplete: (interests: string, resume: string, targetRole: string, githubUrl: string, linkedinUrl: string, age: number, profession: string, educationLevel: string) => void;
   isLoading: boolean;
 }
 
@@ -22,11 +22,25 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, isLoading }) => {
   const [resume, setResume] = useState('');
   const [githubUrl, setGithubUrl] = useState('');
   const [linkedinUrl, setLinkedinUrl] = useState('');
+  const [age, setAge] = useState<number | ''>('');
+  const [profession, setProfession] = useState('');
+  const [educationLevel, setEducationLevel] = useState('');
+  const [ageError, setAgeError] = useState('');
+
+
+  const handleNextStep = () => {
+    if (typeof age !== 'number' || age < 14) {
+      setAgeError('You must be 14 or older to use this application.');
+      return;
+    }
+    setAgeError('');
+    setStep(2);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLoading) return;
-    onComplete(interests, resume, targetRole, githubUrl, linkedinUrl);
+    if (isLoading || typeof age !== 'number') return;
+    onComplete(interests, resume, targetRole, githubUrl, linkedinUrl, age, profession, educationLevel);
   };
 
   return (
@@ -51,10 +65,47 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, isLoading }) => {
             
             <form onSubmit={handleSubmit}>
                 <div style={{ display: step === 1 ? 'block' : 'none' }}>
-                    <h2 className="text-2xl font-semibold mb-2 text-cyan-300">Step 1: Your Interests & Goals</h2>
-                    <p className="text-slate-400 mb-6">What are you passionate about? What role are you aiming for?</p>
+                    <h2 className="text-2xl font-semibold mb-2 text-cyan-300">Step 1: About You</h2>
+                    <p className="text-slate-400 mb-6">Tell us a bit about yourself so we can personalize your journey.</p>
                     
                     <div className="space-y-4">
+                         <div>
+                            <label htmlFor="age" className="block text-sm font-medium text-slate-300 mb-1">Age</label>
+                            <input
+                                id="age"
+                                type="number"
+                                value={age}
+                                onChange={(e) => setAge(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                                className="w-full bg-slate-900/70 border border-slate-700 rounded-md p-2.5 focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                                placeholder="e.g., 25"
+                                required
+                            />
+                             {ageError && <p className="text-red-400 text-xs mt-1">{ageError}</p>}
+                        </div>
+                        <div>
+                            <label htmlFor="profession" className="block text-sm font-medium text-slate-300 mb-1">Current Profession / Role</label>
+                            <input
+                                id="profession"
+                                type="text"
+                                value={profession}
+                                onChange={(e) => setProfession(e.target.value)}
+                                className="w-full bg-slate-900/70 border border-slate-700 rounded-md p-2.5 focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                                placeholder="e.g., Student, Graphic Designer, Unemployed"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="educationLevel" className="block text-sm font-medium text-slate-300 mb-1">Highest Education Level</label>
+                            <input
+                                id="educationLevel"
+                                type="text"
+                                value={educationLevel}
+                                onChange={(e) => setEducationLevel(e.target.value)}
+                                className="w-full bg-slate-900/70 border border-slate-700 rounded-md p-2.5 focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                                placeholder="e.g., High School Diploma, Bachelor's in CS"
+                                required
+                            />
+                        </div>
                         <div>
                             <label htmlFor="targetRole" className="block text-sm font-medium text-slate-300 mb-1">What's your target job title?</label>
                             <input
@@ -100,7 +151,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, isLoading }) => {
                             />
                         </div>
                     </div>
-                    <button type="button" onClick={() => setStep(2)} className="w-full mt-8 px-6 py-3 font-semibold text-white bg-cyan-600 rounded-lg hover:bg-cyan-700 transition-colors shadow-md">
+                    <button type="button" onClick={handleNextStep} className="w-full mt-8 px-6 py-3 font-semibold text-white bg-cyan-600 rounded-lg hover:bg-cyan-700 transition-colors shadow-md">
                         Next Step
                     </button>
                 </div>

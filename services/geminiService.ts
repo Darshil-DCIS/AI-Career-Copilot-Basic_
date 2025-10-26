@@ -31,16 +31,20 @@ const parseJsonResponse = <T>(text: string, fallback: T): T => {
     }
 };
 
-export const generateSkillMap = async (interests: string, resume: string, targetRole: string, githubUrl: string, linkedinUrl: string): Promise<SkillGap[]> => {
+export const generateSkillMap = async (interests: string, resume: string, targetRole: string, githubUrl: string, linkedinUrl: string, age: number, profession: string, educationLevel: string): Promise<SkillGap[]> => {
     const prompt = `
         Analyze the following user profile to identify their current skills and skill gaps for a target role of "${targetRole}".
 
-        **User Interests:** ${interests}
-        **Resume/Experience:** ${resume}
-        **GitHub Profile:** ${githubUrl || 'Not provided'}
-        **LinkedIn Profile:** ${linkedinUrl || 'Not provided'}
+        **User Profile:**
+        - **Age:** ${age}
+        - **Current Profession:** ${profession}
+        - **Education Level:** ${educationLevel}
+        - **Interests:** ${interests}
+        - **Resume/Experience:** ${resume}
+        - **GitHub Profile:** ${githubUrl || 'Not provided'}
+        - **LinkedIn Profile:** ${linkedinUrl || 'Not provided'}
 
-        Based on this information:
+        Based on this complete profile:
         1.  Identify all relevant skills (technical and soft).
         2.  Categorize each skill (e.g., "Programming Languages", "Frameworks", "Cloud", "Soft Skills").
         3.  Estimate their proficiency level (Beginner, Intermediate, Advanced, Expert).
@@ -76,11 +80,19 @@ export const generateSkillMap = async (interests: string, resume: string, target
     }
 };
 
-export const generateRoadmap = async (skills: SkillGap[], targetRole: string, refinementPrompt?: string): Promise<RoadmapStep[]> => {
+export const generateRoadmap = async (user: UserProfile, refinementPrompt?: string): Promise<RoadmapStep[]> => {
     const prompt = `
-        Create a detailed, actionable learning roadmap for a user aiming to become a "${targetRole}".
-        The user's current skills are:
-        ${skills.map(s => `- ${s.name} (${s.proficiency}, ${s.isGap ? 'Gap' : 'Existing'})`).join('\n')}
+        Create a detailed, actionable learning roadmap for a user aiming to become a "${user.targetRole}".
+
+        **User's Profile:**
+        - **Age:** ${user.age}
+        - **Current Profession:** ${user.profession}
+        - **Education Level:** ${user.educationLevel}
+        - **Current Skills:** ${user.skills.map(s => `- ${s.name} (${s.proficiency}, ${s.isGap ? 'Gap' : 'Existing'})`).join('\n')}
+        
+        **Important:** Tailor the roadmap's complexity, pace, and resource suggestions to the user's life stage and background.
+        - For a student or someone early in their career, focus on foundational knowledge and a broader range of skills.
+        - For a working professional, suggest ways to leverage their existing experience and focus on skills that enable a career pivot or advancement. The timeline should be realistic for someone potentially working full-time.
 
         The roadmap should:
         1. Be broken down into logical steps or phases (e.g., "Week 1-2: Foundations").
@@ -133,10 +145,18 @@ export const generateRoadmap = async (skills: SkillGap[], targetRole: string, re
     }
 };
 
-export const generateProjectSuggestions = async (skills: SkillGap[], refinementPrompt?: string): Promise<ProjectSuggestion[]> => {
+export const generateProjectSuggestions = async (user: UserProfile, refinementPrompt?: string): Promise<ProjectSuggestion[]> => {
      const prompt = `
-        Based on the user's skills, suggest 3-5 portfolio-worthy projects.
-        User's skills: ${skills.map(s => s.name).join(', ')}
+        Based on the user's profile, suggest 3-5 portfolio-worthy projects.
+
+        **User's Profile:**
+        - **Age:** ${user.age}
+        - **Current Profession:** ${user.profession}
+        - **Education Level:** ${user.educationLevel}
+        - **Target Role:** ${user.targetRole}
+        - **Skills:** ${user.skills.map(s => s.name).join(', ')}
+
+        **Important:** Tailor the project suggestions. A student might get more foundational or experimental projects. A working professional might get projects that solve a business-like problem or could integrate with their current industry.
 
         For each project:
         1. Provide a catchy title and a brief description.
@@ -265,15 +285,18 @@ export const getResumeFeedback = async (resumeText: string, targetRole: string):
 export const buildResume = async (user: UserProfile, sections: { summary: boolean, skills: boolean, projects: boolean, experience: boolean }): Promise<string> => {
     const prompt = `
         Generate a professional resume in Markdown format for ${user.name}.
-        Target Role: ${user.targetRole}
         
-        Available Data:
-        - Skills: ${user.skills.map(s => s.name).join(', ')}
-        - Completed Projects: ${user.projects.filter(p => p.status === 'Completed').map(p => `- ${p.title}: ${p.description}`).join('\n')}
-        - Contact: LinkedIn: ${user.linkedinUrl || 'N/A'}, GitHub: ${user.githubUrl || 'N/A'}
+        **User Profile:**
+        - **Age:** ${user.age}
+        - **Current Profession:** ${user.profession}
+        - **Education Level:** ${user.educationLevel}
+        - **Target Role:** ${user.targetRole}
+        - **Skills:** ${user.skills.map(s => s.name).join(', ')}
+        - **Completed Projects:** ${user.projects.filter(p => p.status === 'Completed').map(p => `- ${p.title}: ${p.description}`).join('\n')}
+        - **Contact:** LinkedIn: ${user.linkedinUrl || 'N/A'}, GitHub: ${user.githubUrl || 'N/A'}
 
         Include the following sections based on the user's selection:
-        ${sections.summary ? '- A professional summary (2-3 sentences).' : ''}
+        ${sections.summary ? '- A professional summary (2-3 sentences), tailored to their experience level.' : ''}
         ${sections.skills ? '- A skills section, categorized.' : ''}
         ${sections.projects ? '- A projects section, highlighting key achievements for 2-3 top projects.' : ''}
         ${sections.experience ? '- A professional experience section with placeholders for the user to fill in.' : ''}
@@ -289,9 +312,9 @@ export const buildResume = async (user: UserProfile, sections: { summary: boolea
     }
 };
 
-export const summarizeInterview = async (transcript: ChatMessage[], targetRole: string): Promise<string> => {
+export const summarizeInterview = async (transcript: ChatMessage[], user: UserProfile): Promise<string> => {
     const prompt = `
-        Analyze the following mock interview transcript for a "${targetRole}" role.
+        Analyze the following mock interview transcript for a "${user.targetRole}" role. The candidate is ${user.age} years old and is a ${user.profession}.
         Provide a concise summary of feedback for the candidate. Structure the feedback using Markdown with the following sections:
         - **Overall Performance:** A brief summary.
         - **Strengths:** 2-3 bullet points on what they did well.
@@ -309,8 +332,8 @@ export const summarizeInterview = async (transcript: ChatMessage[], targetRole: 
     }
 };
 
-export const getQuizTopics = async (targetRole: string): Promise<string[]> => {
-    const prompt = `List 5-7 key technical or domain-specific topics that are essential for a "${targetRole}" interview. Return as a JSON array of strings.`;
+export const getQuizTopics = async (user: UserProfile): Promise<string[]> => {
+    const prompt = `List 5-7 key technical or domain-specific topics that are essential for a "${user.targetRole}" interview. Take into account that the candidate is a ${user.profession} with an education level of ${user.educationLevel}. Return as a JSON array of strings.`;
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-flash-lite-latest',
@@ -364,14 +387,14 @@ export const generateQuizQuestion = async (topics: string[], askedQuestions: str
     }
 };
 
-export const summarizeVoiceSession = async (transcript: { speaker: string, text: string }[], userName: string, targetRole: string): Promise<string> => {
+export const summarizeVoiceSession = async (transcript: { speaker: string, text: string }[], user: UserProfile): Promise<string> => {
     const prompt = `
-        Analyze the following voice session transcript between an AI Mentor and a user named ${userName}, who is preparing for a "${targetRole}" role.
+        Analyze the following voice session transcript between an AI Mentor and a user named ${user.name}, who is a ${user.age}-year-old ${user.profession} preparing for a "${user.targetRole}" role.
         Identify the key takeaways and advice given during the session.
         Summarize these points into 3-4 bullet points using Markdown.
 
         **Transcript:**
-        ${transcript.map(t => `${t.speaker === 'user' ? userName : 'Mentor'}: ${t.text}`).join('\n')}
+        ${transcript.map(t => `${t.speaker === 'user' ? user.name : 'Mentor'}: ${t.text}`).join('\n')}
     `;
     try {
         const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
@@ -524,11 +547,15 @@ export const generateProfessionalEmail = async (recipientRole: string, goal: str
 export const generateElevatorPitch = async (user: UserProfile): Promise<string> => {
     const prompt = `
         Craft a compelling 30-second elevator pitch for ${user.name}.
-        - Target Role: ${user.targetRole}
-        - Key Skills: ${user.skills.filter(s => !s.isGap).map(s => s.name).slice(0, 5).join(', ')}
-        - Highlight from Projects: Focus on a completed project if available: ${user.projects.find(p => p.status === 'Completed')?.title || 'General passion for the field'}.
+        
+        **User Profile:**
+        - **Age:** ${user.age}
+        - **Current Role:** ${user.profession}
+        - **Target Role:** ${user.targetRole}
+        - **Key Skills:** ${user.skills.filter(s => !s.isGap).map(s => s.name).slice(0, 5).join(', ')}
+        - **Highlight from Projects:** Focus on a completed project if available: ${user.projects.find(p => p.status === 'Completed')?.title || 'General passion for the field'}.
 
-        The pitch should be engaging, confident, and clearly state their value proposition for their target role.
+        The pitch should be engaging, confident, and clearly state their value proposition for their target role, keeping their background in mind.
     `;
     const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
     return response.text;
@@ -538,7 +565,7 @@ export const generateCoverLetter = async (jobDescription: string, userInfo: stri
     const prompt = `
         Write a professional cover letter for ${user.name} applying for a job.
 
-        **User's Information:**
+        **User's Information (from profile):**
         ${userInfo}
 
         **Job Description:**
@@ -556,14 +583,15 @@ export const generateCoverLetter = async (jobDescription: string, userInfo: stri
 
 export const optimizeLinkedInSummary = async (currentSummary: string, user: UserProfile): Promise<string> => {
     const prompt = `
-        Act as a LinkedIn profile optimization expert. Review and improve this LinkedIn summary for ${user.name}, who is targeting a "${user.targetRole}" role.
+        Act as a LinkedIn profile optimization expert. Review and improve this LinkedIn summary for ${user.name}, who is a ${user.age}-year-old ${user.profession} targeting a "${user.targetRole}" role.
 
         **Current Summary (if any):**
         ${currentSummary || "None provided. Please create a new one from scratch."}
 
         **User's Profile Data:**
-        - Key Skills: ${user.skills.filter(s => s.proficiency !== 'Beginner').map(s => s.name).join(', ')}
-        - Completed Projects: ${user.projects.filter(p => p.status === 'Completed').map(p => p.title).join(', ')}
+        - **Key Skills:** ${user.skills.filter(s => s.proficiency !== 'Beginner').map(s => s.name).join(', ')}
+        - **Completed Projects:** ${user.projects.filter(p => p.status === 'Completed').map(p => p.title).join(', ')}
+        - **Education:** ${user.educationLevel}
 
         The optimized summary should be:
         - Written in the first person.
@@ -571,7 +599,7 @@ export const optimizeLinkedInSummary = async (currentSummary: string, user: User
         - Showcase their top 3-5 skills and expertise areas.
         - Mention a key achievement or project experience.
         - End with a call to action (e.g., "I'm passionate about [topic] and open to connecting...").
-        - Be keyword-rich for the target role.
+        - Be keyword-rich for the target role and appropriate for their experience level.
     `;
     const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
     return response.text;

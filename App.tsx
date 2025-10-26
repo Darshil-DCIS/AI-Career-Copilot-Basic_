@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import type { UserProfile, InterviewSession, VoiceSession, UserProject, Achievement, SkillGap, JobPosting, TrackedJob, TrackedJobStatus, QuizSession } from './types';
+import type { UserProfile, InterviewSession, VoiceSession, UserProject, Achievement, SkillGap, JobPosting, TrackedJob, TrackedJobStatus, QuizSession, ChatSession, ChatMessage } from './types';
 import Dashboard from './components/Dashboard';
 import SmartChat from './components/AiMentorChat';
 import ResumeFeedback from './components/ResumeFeedback';
@@ -13,7 +13,7 @@ import ProfileEditor from './components/ProfileEditor';
 import JobFinder from './components/JobFinder';
 import TrendWatcher from './components/TrendWatcher';
 import AiToolbox from './components/AiToolbox';
-import { DashboardIcon, ChatIcon, ResumeIcon, SparklesIcon, InterviewIcon, MicrophoneIcon, MapPinIcon, LogoutIcon, ProjectIcon, UserIcon, BriefcaseIcon, TrendingUpIcon, ToolboxIcon } from './components/icons';
+import { DashboardIcon, ChatIcon, ResumeIcon, SparklesIcon, InterviewIcon, MicrophoneIcon, MapPinIcon, LogoutIcon, ProjectIcon, UserIcon, BriefcaseIcon, TrendingUpIcon, ToolboxIcon, MenuIcon } from './components/icons';
 import { generateSkillMap, generateRoadmap, generateProjectSuggestions, getIndustryTrends } from './services/geminiService';
 import { supabase } from './supabaseClient';
 import { Session } from '@supabase/supabase-js';
@@ -29,6 +29,7 @@ const App: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [isProfileLoading, setIsProfileLoading] = useState(true);
     const [appError, setAppError] = useState<string | null>(null);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     useEffect(() => {
         const fetchSession = async () => {
@@ -85,37 +86,50 @@ const App: React.FC = () => {
         }
     };
 
-    const handleOnboardingComplete = useCallback(async (interests: string, resume: string, targetRole: string, githubUrl: string, linkedinUrl:string) => {
+    const handleOnboardingComplete = useCallback(async (interests: string, resume: string, targetRole: string, githubUrl: string, linkedinUrl:string, age: number, profession: string, educationLevel: string) => {
         if (!session) return;
         setIsLoading(true);
         setAppError(null);
         try {
-            const skills = await generateSkillMap(interests, resume, targetRole, githubUrl, linkedinUrl);
-            const [roadmap, projects, trends] = await Promise.all([
-                generateRoadmap(skills, targetRole),
-                generateProjectSuggestions(skills),
-                getIndustryTrends(targetRole)
-            ]);
-
-            const profileData: UserProfile = {
+            const skills = await generateSkillMap(interests, resume, targetRole, githubUrl, linkedinUrl, age, profession, educationLevel);
+            
+            // Create a temporary user object to pass to content generation functions
+            const tempUser: UserProfile = {
                 id: session.user.id,
                 name: session.user.user_metadata.full_name || "User",
                 targetRole,
+                age,
+                profession,
+                educationLevel,
                 xp: 0,
                 level: 1,
                 streak: 1,
                 skills,
-                roadmap,
-                // FIX: Use 'as const' to prevent TypeScript from widening the 'Not Started' literal to a generic 'string' type.
-                projects: (projects || []).map(p => ({ ...p, status: 'Not Started' as const })),
+                roadmap: [],
+                projects: [],
                 achievements: [],
-                trends: trends,
+                trends: [],
                 trackedJobs: [],
                 githubUrl: githubUrl || undefined,
                 linkedinUrl: linkedinUrl || undefined,
                 interviewHistory: [],
                 voiceMentorHistory: [],
                 quizHistory: [],
+                smartChatHistory: [],
+            };
+
+            const [roadmap, projects, trends] = await Promise.all([
+                generateRoadmap(tempUser),
+                generateProjectSuggestions(tempUser),
+                getIndustryTrends(targetRole)
+            ]);
+
+            const profileData: UserProfile = {
+                ...tempUser,
+                roadmap,
+                // FIX: Use 'as const' to prevent TypeScript from widening the 'Not Started' literal to a generic 'string' type.
+                projects: (projects || []).map(p => ({ ...p, status: 'Not Started' as const })),
+                trends: trends,
             };
 
             const { error } = await supabase.from('profiles').upsert(profileData, {
@@ -181,8 +195,8 @@ const App: React.FC = () => {
                 }
                 setIsLoading(true);
                 const [newRoadmap, newProjects, newTrends] = await Promise.all([
-                    generateRoadmap(optimisticUser.skills, newTargetRole),
-                    generateProjectSuggestions(optimisticUser.skills),
+                    generateRoadmap(optimisticUser),
+                    generateProjectSuggestions(optimisticUser),
                     getIndustryTrends(newTargetRole)
                 ]);
                 let regeneratedUser = { 
@@ -245,7 +259,7 @@ const App: React.FC = () => {
     const handleRegenerateRoadmap = async (prompt: string) => {
         if (!user) return;
         setIsLoading(true);
-        const newRoadmap = await generateRoadmap(user.skills || [], user.targetRole, prompt);
+        const newRoadmap = await generateRoadmap(user, prompt);
         await handleUpdateProfile({ roadmap: newRoadmap });
         setIsLoading(false);
     };
@@ -253,7 +267,7 @@ const App: React.FC = () => {
     const handleRegenerateProjects = async (prompt: string) => {
         if (!user) return;
         setIsLoading(true);
-        const newProjects = await generateProjectSuggestions(user.skills || [], prompt);
+        const newProjects = await generateProjectSuggestions(user, prompt);
         // FIX: Use 'as const' to prevent TypeScript from widening the 'Not Started' literal to a generic 'string' type.
         await handleUpdateProfile({ projects: (newProjects || []).map(p => ({ ...p, status: 'Not Started' as const })) });
         setIsLoading(false);
@@ -272,6 +286,16 @@ const App: React.FC = () => {
     const handleSaveVoiceSession = (sessionData: VoiceSession) => {
         if(!user) return;
         handleUpdateProfile({ voiceMentorHistory: [sessionData, ...(user.voiceMentorHistory || [])] });
+    };
+
+    const handleSaveSmartChatHistory = (session: ChatSession) => {
+        if(!user) return;
+        const updatedHistory = [...(user.smartChatHistory || []), session];
+        // Keep only the last 20 sessions to prevent data bloat
+        if (updatedHistory.length > 20) {
+            updatedHistory.shift();
+        }
+        handleUpdateProfile({ smartChatHistory: updatedHistory });
     };
 
     const handleTrackJob = (jobToTrack: JobPosting) => {
@@ -329,7 +353,7 @@ const App: React.FC = () => {
     const views: Record<View, React.ReactNode> = {
         dashboard: <Dashboard user={user} />,
         journey: <MyJourney user={user} onRoadmapToggle={handleRoadmapToggle} onUpdateProject={handleUpdateProject} onRegenerateRoadmap={handleRegenerateRoadmap} onRegenerateProjects={handleRegenerateProjects} onTrackJob={handleTrackJob} />,
-        chat: <SmartChat user={user} />,
+        chat: <SmartChat user={user} onSaveHistory={handleSaveSmartChatHistory} />,
         resume: <ResumeFeedback user={user} />,
         interview: <InterviewCoach user={user} onSaveInterview={handleSaveInterview} onSaveQuiz={handleSaveQuiz} />,
         voice: <VoiceMentor user={user} onSaveSession={handleSaveVoiceSession} />,
@@ -339,6 +363,43 @@ const App: React.FC = () => {
         profile: <ProfileEditor user={user} onUpdateProfile={handleUpdateProfile} />,
         toolbox: <AiToolbox user={user} />
     }
+    
+    const MobileMenu: React.FC<{
+        currentView: View;
+        onNavigate: (view: View) => void;
+        onClose: () => void;
+        onLogout: () => void;
+    }> = ({ currentView, onNavigate, onClose, onLogout }) => {
+        return (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 md:hidden" onClick={onClose}>
+                <div 
+                    className="fixed inset-y-0 left-0 w-4/5 max-w-xs bg-slate-900 shadow-2xl p-4 flex flex-col animate-slide-in"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="p-3 text-teal-400 flex items-center gap-3 mb-6">
+                       <SparklesIcon className="w-9 h-9" />
+                       <span className="font-bold text-2xl text-slate-100">Copilot Menu</span>
+                    </div>
+                    <div className="flex flex-col gap-2 flex-grow overflow-y-auto">
+                        <NavItem icon={<DashboardIcon />} label="Dashboard" active={currentView === 'dashboard'} onClick={() => onNavigate('dashboard')} />
+                        <NavItem icon={<ProjectIcon />} label="My Journey" active={currentView === 'journey'} onClick={() => onNavigate('journey')} />
+                        <NavItem icon={<ChatIcon />} label="Smart Chat" active={currentView === 'chat'} onClick={() => onNavigate('chat')} />
+                        <NavItem icon={<ToolboxIcon />} label="AI Toolbox" active={currentView === 'toolbox'} onClick={() => onNavigate('toolbox')} />
+                        <NavItem icon={<ResumeIcon />} label="Resume" active={currentView === 'resume'} onClick={() => onNavigate('resume')} />
+                        <NavItem icon={<InterviewIcon />} label="Interview" active={currentView === 'interview'} onClick={() => onNavigate('interview')} />
+                        <NavItem icon={<MicrophoneIcon />} label="Voice Mentor" active={currentView === 'voice'} onClick={() => onNavigate('voice')} />
+                        <NavItem icon={<MapPinIcon />} label="Courses" active={currentView === 'courses'} onClick={() => onNavigate('courses')} />
+                        <NavItem icon={<BriefcaseIcon />} label="Job Finder" active={currentView === 'jobs'} onClick={() => onNavigate('jobs')} />
+                        <NavItem icon={<TrendingUpIcon />} label="Trend Watcher" active={currentView === 'trends'} onClick={() => onNavigate('trends')} />
+                    </div>
+                     <div className="mt-auto flex flex-col gap-2 pt-4 border-t border-slate-800">
+                        <NavItem icon={<UserIcon />} label="Profile" active={currentView === 'profile'} onClick={() => onNavigate('profile')} />
+                        <NavItem icon={<LogoutIcon />} label="Logout" active={false} onClick={onLogout} />
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     return (
         <div className="flex h-screen w-full">
@@ -376,8 +437,22 @@ const App: React.FC = () => {
                 <NavItemMobile icon={<ProjectIcon />} active={view === 'journey'} onClick={() => setView('journey')} />
                 <NavItemMobile icon={<ChatIcon />} active={view === 'chat'} onClick={() => setView('chat')} />
                 <NavItemMobile icon={<ToolboxIcon />} active={view === 'toolbox'} onClick={() => setView('toolbox')} />
-                <NavItemMobile icon={<UserIcon />} active={view === 'profile'} onClick={() => setView('profile')} />
+                <NavItemMobile icon={<MenuIcon />} active={isMobileMenuOpen} onClick={() => setIsMobileMenuOpen(true)} />
             </nav>
+            {isMobileMenuOpen && (
+                <MobileMenu
+                    currentView={view}
+                    onNavigate={(newView) => {
+                        setView(newView);
+                        setIsMobileMenuOpen(false);
+                    }}
+                    onClose={() => setIsMobileMenuOpen(false)}
+                    onLogout={() => {
+                        handleLogout();
+                        setIsMobileMenuOpen(false);
+                    }}
+                />
+            )}
         </div>
     );
 };

@@ -48,9 +48,14 @@ const InterviewCoach: React.FC<InterviewCoachProps> = ({ user, onSaveInterview, 
         setView('interview');
         
         const systemInstruction = `You are an expert AI Interviewer conducting a realistic mock interview with ${user.name} for a "${user.targetRole}" position.
+        **Candidate Context:**
+        - **Age:** ${user.age}
+        - **Profession:** ${user.profession}
+        - **Education:** ${user.educationLevel}
+        
         Your process is as follows:
         1. Start the interview by introducing yourself and setting the stage.
-        2. Ask one question at a time. Mix behavioral questions (like "Tell me about a time you faced a challenge"), technical questions, and situational questions relevant to the role.
+        2. Ask one question at a time. Mix behavioral questions (like "Tell me about a time you faced a challenge"), technical questions, and situational questions relevant to the role and the candidate's likely experience level.
         3. After the user answers, critically evaluate their response. If it's a good answer, acknowledge it. If it's brief or lacks detail, ask ONE probing follow-up question to encourage them to elaborate (e.g., "Could you tell me more about the outcome?", "What was your specific role in that project?").
         4. After their response to the follow-up (or their initial good answer), provide brief, constructive feedback (1-2 sentences).
         5. Seamlessly transition to the next, different question. Do not number the questions.
@@ -112,7 +117,7 @@ const InterviewCoach: React.FC<InterviewCoachProps> = ({ user, onSaveInterview, 
             return;
         }
         setIsLoading(true);
-        const feedbackSummary = await summarizeInterview(messages, user.targetRole);
+        const feedbackSummary = await summarizeInterview(messages, user);
         setSummary(feedbackSummary);
         const session: InterviewSession = {
             date: new Date().toISOString(),
@@ -130,7 +135,7 @@ const InterviewCoach: React.FC<InterviewCoachProps> = ({ user, onSaveInterview, 
     const startQuizSetup = async () => {
         setIsLoading(true);
         setView('quiz-setup');
-        const topics = await getQuizTopics(user.targetRole);
+        const topics = await getQuizTopics(user);
         setQuizTopics(topics);
         setIsLoading(false);
     };

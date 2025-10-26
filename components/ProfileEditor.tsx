@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import type { UserProfile, SkillGap } from '../types';
 import Card from './common/Card';
@@ -11,6 +10,9 @@ interface ProfileEditorProps {
 
 const ProfileEditor: React.FC<ProfileEditorProps> = ({ user, onUpdateProfile }) => {
     const [name, setName] = useState(user.name);
+    const [age, setAge] = useState(user.age);
+    const [profession, setProfession] = useState(user.profession);
+    const [educationLevel, setEducationLevel] = useState(user.educationLevel);
     const [targetRole, setTargetRole] = useState(user.targetRole);
     const [githubUrl, setGithubUrl] = useState(user.githubUrl || '');
     const [linkedinUrl, setLinkedinUrl] = useState(user.linkedinUrl || '');
@@ -55,6 +57,9 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ user, onUpdateProfile }) 
         try {
             await onUpdateProfile({
                 name,
+                age,
+                profession,
+                educationLevel,
                 targetRole,
                 githubUrl,
                 linkedinUrl,
@@ -71,7 +76,10 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ user, onUpdateProfile }) 
         }
     };
     
-    const hasChanges = name !== user.name || 
+    const hasChanges = name !== user.name ||
+                       age !== user.age ||
+                       profession !== user.profession ||
+                       educationLevel !== user.educationLevel ||
                        targetRole !== user.targetRole || 
                        githubUrl !== (user.githubUrl || '') || 
                        linkedinUrl !== (user.linkedinUrl || '') ||
@@ -93,6 +101,18 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ user, onUpdateProfile }) 
                                 <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-slate-900/70 border border-slate-700 rounded-md p-2.5 focus:ring-2 focus:ring-teal-500 focus:outline-none" />
                             </div>
                             <div>
+                                <label htmlFor="age" className="block text-sm font-medium text-slate-300 mb-1">Age</label>
+                                <input id="age" type="number" value={age} onChange={(e) => setAge(parseInt(e.target.value, 10) || 0)} className="w-full bg-slate-900/70 border border-slate-700 rounded-md p-2.5 focus:ring-2 focus:ring-teal-500 focus:outline-none" />
+                            </div>
+                              <div>
+                                <label htmlFor="profession" className="block text-sm font-medium text-slate-300 mb-1">Profession</label>
+                                <input id="profession" type="text" value={profession} onChange={(e) => setProfession(e.target.value)} className="w-full bg-slate-900/70 border border-slate-700 rounded-md p-2.5 focus:ring-2 focus:ring-teal-500 focus:outline-none" />
+                            </div>
+                             <div>
+                                <label htmlFor="educationLevel" className="block text-sm font-medium text-slate-300 mb-1">Education Level</label>
+                                <input id="educationLevel" type="text" value={educationLevel} onChange={(e) => setEducationLevel(e.target.value)} className="w-full bg-slate-900/70 border border-slate-700 rounded-md p-2.5 focus:ring-2 focus:ring-teal-500 focus:outline-none" />
+                            </div>
+                            <div className="md:col-span-2">
                                 <label htmlFor="targetRole" className="block text-sm font-medium text-slate-300 mb-1">Target Role</label>
                                 <input id="targetRole" type="text" value={targetRole} onChange={(e) => setTargetRole(e.target.value)} className="w-full bg-slate-900/70 border border-slate-700 rounded-md p-2.5 focus:ring-2 focus:ring-teal-500 focus:outline-none" />
                                 <p className="text-xs text-slate-500 mt-1">Warning: Changing this will regenerate your roadmap and projects.</p>

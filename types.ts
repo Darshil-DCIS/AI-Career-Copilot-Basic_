@@ -56,6 +56,13 @@ export interface ChatMessage {
     sources?: { title: string; url: string }[];
 }
 
+export interface ChatSession {
+    date: string;
+    mode: string;
+    messages: ChatMessage[];
+}
+
+
 export interface InterviewSession {
     date: string;
     targetRole: string;
@@ -111,6 +118,9 @@ export interface TrackedJob extends JobPosting {
 export interface UserProfile {
   id?: string;
   name: string;
+  age: number;
+  profession: string;
+  educationLevel: string;
   targetRole: string;
   xp: number;
   level: number;
@@ -126,6 +136,7 @@ export interface UserProfile {
   interviewHistory: InterviewSession[];
   voiceMentorHistory: VoiceSession[];
   quizHistory: QuizSession[];
+  smartChatHistory: ChatSession[];
 }
 
 export interface ResumeFeedback {
